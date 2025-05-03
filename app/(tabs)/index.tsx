@@ -62,7 +62,7 @@ export default function MapScreen() {
               : activeOrders[0].customerLocation
             : undefined
         }
-        showRoute={activeOrders.length > 0}
+        showNavigationButton={activeOrders.length > 0}
         height={500}
       />
       

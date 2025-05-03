@@ -54,8 +54,6 @@ export default function ProfileScreen() {
     );
   };
   
-  if (!user) return null;
-  
   return (
     <ScrollView 
       style={styles.container}
@@ -63,36 +61,25 @@ export default function ProfileScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Image 
-          source={{ uri: user.photoUrl }} 
-          style={styles.profileImage} 
-        />
-        <Text style={styles.name}>{user.name}</Text>
-        <View style={[
-          styles.statusBadge, 
-          user.isOnline ? styles.statusOnline : styles.statusOffline
-        ]}>
-          <Text style={styles.statusText}>
-            {user.isOnline ? "Online" : "Offline"}
-          </Text>
-        </View>
+        <View style={styles.profileImage} />
+        <Text style={styles.name}>Khách</Text>
       </View>
       
       <View style={styles.earningsSection}>
         <Text style={styles.sectionTitle}>Today's Earnings</Text>
         <View style={styles.earningsCard}>
           <View style={styles.earningsItem}>
-            <Text style={styles.earningsValue}>150,000đ</Text>
+            <Text style={styles.earningsValue}>0đ</Text>
             <Text style={styles.earningsLabel}>Total Earnings</Text>
           </View>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsItem}>
-            <Text style={styles.earningsValue}>5</Text>
+            <Text style={styles.earningsValue}>0</Text>
             <Text style={styles.earningsLabel}>Deliveries</Text>
           </View>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsItem}>
-            <Text style={styles.earningsValue}>4.8</Text>
+            <Text style={styles.earningsValue}>0</Text>
             <Text style={styles.earningsLabel}>Rating</Text>
           </View>
         </View>
@@ -101,18 +88,18 @@ export default function ProfileScreen() {
       <View style={styles.infoSection}>
         <View style={styles.infoItem}>
           <Mail size={20} color={colors.primary} />
-          <Text style={styles.infoText}>{user.email}</Text>
+          <Text style={styles.infoText}>guest@example.com</Text>
         </View>
         <View style={styles.infoItem}>
           <Phone size={20} color={colors.primary} />
-          <Text style={styles.infoText}>{formatPhoneNumber(user.phone)}</Text>
+          <Text style={styles.infoText}>+84 123 456 789</Text>
         </View>
       </View>
       
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/edit-profile')}>
           <View style={styles.menuItemLeft}>
             <User size={20} color={colors.text} />
             <Text style={styles.menuItemText}>Edit Profile</Text>
@@ -120,7 +107,7 @@ export default function ProfileScreen() {
           <ChevronRight size={20} color={colors.subtext} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/earnings-history')}>
           <View style={styles.menuItemLeft}>
             <DollarSign size={20} color={colors.text} />
             <Text style={styles.menuItemText}>Earnings History</Text>
@@ -128,7 +115,7 @@ export default function ProfileScreen() {
           <ChevronRight size={20} color={colors.subtext} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/working-hours')}>
           <View style={styles.menuItemLeft}>
             <Clock size={20} color={colors.text} />
             <Text style={styles.menuItemText}>Working Hours</Text>
@@ -136,7 +123,7 @@ export default function ProfileScreen() {
           <ChevronRight size={20} color={colors.subtext} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/notifications')}>
           <View style={styles.menuItemLeft}>
             <Bell size={20} color={colors.text} />
             <Text style={styles.menuItemText}>Notifications</Text>
@@ -144,7 +131,7 @@ export default function ProfileScreen() {
           <ChevronRight size={20} color={colors.subtext} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/settings')}>
           <View style={styles.menuItemLeft}>
             <Settings size={20} color={colors.text} />
             <Text style={styles.menuItemText}>Settings</Text>
@@ -166,11 +153,9 @@ export default function ProfileScreen() {
       </View>
       
       <TouchableOpacity 
-        style={styles.logoutButton}
-        onPress={handleLogout}
-      >
-        <LogOut size={20} color={colors.error} />
-        <Text style={styles.logoutText}>Logout</Text>
+        onPress={() => router.push("/auth/AuthScreen")}
+        style={{position: 'absolute', bottom: 24, right: 24, backgroundColor: colors.primary, padding: 12, borderRadius: 8, alignItems: 'center'}}>
+        <Text style={{color: colors.white, fontWeight: 'bold', fontSize: 14}}>Đăng nhập / Đăng ký</Text>
       </TouchableOpacity>
       
       <Text style={styles.versionText}>Version 1.0.0</Text>

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { View, StyleSheet, Platform } from "react-native";
 import { MapPin, Package, Clock, User } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { useOrderStore } from "@/store/orderStore";
+import { useAuthStore } from "@/store/authStore";
 import { NewOrderPopup } from "@/components/NewOrderPopup";
 import { NavigationBar } from "@/components/NavigationBar";
 
@@ -17,19 +18,32 @@ export default function TabLayout() {
     activeOrders
   } = useOrderStore();
   
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("Map");
   
+  // Kiểm tra xác thực trước khi hiển thị tab
   useEffect(() => {
-    // Fetch initial orders
-    fetchOrders();
-    
-    // Generate a new order after 10 seconds
-    const timer = setTimeout(() => {
-      generateNewOrderRequest();
-    }, 10000);
-    
-    return () => clearTimeout(timer);
-  }, []);
+    if (!isAuthenticated) {
+      router.replace('/auth/login');
+    }
+  }, [isAuthenticated, router]);
+  
+  useEffect(() => {
+    // Chỉ tải dữ liệu khi đã xác thực
+    if (isAuthenticated) {
+      // Tải danh sách đơn hàng ban đầu
+      fetchOrders();
+      
+      // Trong ứng dụng thực tế, chúng ta sẽ kết nối với websocket hoặc push notification
+      // Tạm thời giữ lại chức năng này để demo
+      const timer = setTimeout(() => {
+        generateNewOrderRequest();
+      }, 10000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated]);
   
   return (
     <View style={styles.container}>

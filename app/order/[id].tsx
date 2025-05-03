@@ -151,7 +151,7 @@ export default function OrderDetailScreen() {
           destinationLocation={order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant" 
             ? order.restaurant.location 
             : order.customerLocation}
-          showRoute={true}
+          showNavigationButton={!isDelivered}
           height={200}
         />
         
