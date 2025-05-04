@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
@@ -5,7 +6,6 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Platform, View, ActivityIndicator, Text } from "react-native";
 import { ErrorBoundary } from "./error-boundary";
-import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/constants/colors";
 
 export const unstable_settings = {
@@ -21,15 +21,15 @@ export default function RootLayout() {
   });
   
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const checkAuth = useAuthStore((state) => state.checkAuth);
+  // const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  // const checkAuth = useAuthStore((state) => state.checkAuth);
 
   // Kiểm tra xác thực khi ứng dụng khởi động
   useEffect(() => {
     async function verifyAuthentication() {
       if (loaded) {
         try {
-          await checkAuth();
+          // await checkAuth();
         } catch (error) {
           console.error("Lỗi khi kiểm tra xác thực:", error);
         } finally {
@@ -40,7 +40,7 @@ export default function RootLayout() {
     }
 
     verifyAuthentication();
-  }, [loaded, checkAuth]);
+  }, [loaded]);
 
   useEffect(() => {
     if (error) {
@@ -59,24 +59,26 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
-      <RootLayoutNav />
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <RootLayoutNav />
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 
 function RootLayoutNav() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  // const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const router = useRouter();
   
   // Chuyển hướng người dùng dựa trên trạng thái xác thực
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/(tabs)');
-    } else {
-      router.replace('/auth/login');
-    }
-  }, [isAuthenticated, router]);
+    // if (isAuthenticated) {
+    //   router.replace('/(tabs)');
+    // } else {
+    //   router.replace('/auth/login');
+    // }
+  }, [router]);
   
   return (
     <Stack screenOptions={{ headerShown: false }}>

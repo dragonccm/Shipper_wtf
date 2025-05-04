@@ -11,6 +11,8 @@ export const colors = {
   success: "#27ae60",
   warning: "#f39c12",
   info: "#3498db",
+  white: "#ffffff", // Added definition for white color
+  danger : "#3498db",
   statusColors: {
     goingToRestaurant: "#3498db",
     arrivedAtRestaurant: "#f39c12",

@@ -7,13 +7,13 @@ import { useAuthStore } from "@/store/authStore";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const logout = useAuthStore((state) => state.logout);
+  // const logout = useAuthStore((state) => state.logout);
   
   // Mock data - replace with actual data from your API/store
   const [settings, setSettings] = useState([
-    { id: 1, title: 'Dark Mode', icon: <Moon size={20} color={colors.primary} />, enabled: false },
-    { id: 2, title: 'Notifications', icon: <Bell size={20} color={colors.primary} />, enabled: true },
-    { id: 3, title: 'Privacy', icon: <Lock size={20} color={colors.primary} />, enabled: true },
+    { id: 1, title: 'Chế độ tối', icon: <Moon size={20} color={colors.primary} />, enabled: false },
+    { id: 2, title: 'Thông báo', icon: <Bell size={20} color={colors.primary} />, enabled: true },
+    { id: 3, title: 'Riêng tư', icon: <Lock size={20} color={colors.primary} />, enabled: true },
   ]);
 
   const toggleSwitch = (id: number) => {
@@ -30,7 +30,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Cài đặt</Text>
         <View style={{ width: 24 }} />
       </View>
       
@@ -50,18 +50,18 @@ export default function SettingsScreen() {
         
         <TouchableOpacity style={styles.supportItem}>
           <HelpCircle size={20} color={colors.primary} />
-          <Text style={styles.settingTitle}>Help & Support</Text>
+          <Text style={styles.settingTitle}>Trợ giúp & Hỗ trợ</Text>
           <ChevronLeft size={20} color={colors.subtext} style={{ transform: [{ rotate: '180deg' }] }} />
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.logoutButton}
           onPress={() => {
-            logout();
+            // logout();
             router.replace('/');
           }}
         >
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

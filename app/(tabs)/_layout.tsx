@@ -4,7 +4,7 @@ import { View, StyleSheet, Platform } from "react-native";
 import { MapPin, Package, Clock, User } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { useOrderStore } from "@/store/orderStore";
-import { useAuthStore } from "@/store/authStore";
+// import { useAuthStore } from "../../store/authStore";
 import { NewOrderPopup } from "@/components/NewOrderPopup";
 import { NavigationBar } from "@/components/NavigationBar";
 
@@ -18,7 +18,8 @@ export default function TabLayout() {
     activeOrders
   } = useOrderStore();
   
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  // const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthenticated = true; // Dùng dữ liệu giả để luôn xác thực
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("Map");
   
@@ -147,6 +148,14 @@ export default function TabLayout() {
                 showNotification
               />
             )
+          }}
+          listeners={{
+            tabPress: (e) => {
+              // Ngăn chặn hành vi mặc định
+              e.preventDefault();
+              // Điều hướng đến màn hình profile trong thư mục profile
+              router.push('/profile/profile');
+            },
           }}
         />
       </Tabs>

@@ -1,144 +1,92 @@
-import React, { useEffect, useState } from "react";
-import { View, StyleSheet, Text, TouchableOpacity, Platform } from "react-native";
-import { useRouter } from "expo-router";
-import { CustomMapView } from "@/components/MapView";
-import { Button } from "@/components/Button";
-import { colors } from "@/constants/colors";
-import { useAuthStore } from "@/store/authStore";
-import { useOrderStore } from "@/store/orderStore";
-import { Location } from "@/types";
-import { Navigation, Power } from "lucide-react-native";
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { colors } from '@/constants/colors';
+import { MapPin, Navigation, Search } from 'lucide-react-native';
+import MapView, { Marker } from 'react-native-maps';
 
 export default function MapScreen() {
-  const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const toggleOnlineStatus = useAuthStore((state) => state.toggleOnlineStatus);
-  const updateUserLocation = useAuthStore((state) => state.updateUserLocation);
-  const activeOrders = useOrderStore((state) => state.activeOrders);
+  const [selectedAddress, setSelectedAddress] = useState("123 Delivery St, City");
   
-  const [currentLocation, setCurrentLocation] = useState<Location | undefined>(
-    user?.currentLocation
-  );
-  
-  // Simulate location updates
-  useEffect(() => {
-    if (!user?.isOnline) return;
-    
-    const interval = setInterval(() => {
-      if (currentLocation) {
-        const newLocation: Location = {
-          latitude: currentLocation.latitude + (Math.random() * 0.001 - 0.0005),
-          longitude: currentLocation.longitude + (Math.random() * 0.001 - 0.0005),
-        };
-        
-        setCurrentLocation(newLocation);
-        updateUserLocation(newLocation);
-      }
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, [currentLocation, user?.isOnline]);
-  
-  const handleToggleOnlineStatus = () => {
-    toggleOnlineStatus();
+  const initialRegion = {
+    latitude: 10.762622,
+    longitude: 106.660172,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
   };
-  
-  const handleViewActiveOrder = () => {
-    if (activeOrders.length > 0) {
-      router.push(`/order/${activeOrders[0].id}`);
+
+  const nearbyLocations = [
+    {
+      id: '1',
+      name: 'Shopping Mall',
+      address: '123 Shopping St',
+      distance: '1.2 km',
+    },
+    {
+      id: '2',
+      name: 'Downtown Market',
+      address: '456 Market Ave',
+      distance: '2.5 km',
+    },
+    {
+      id: '3',
+      name: 'City Center',
+      address: '789 Main St',
+      distance: '3.7 km',
     }
-  };
-  
+  ];
+
   return (
     <View style={styles.container}>
-      <CustomMapView 
-        currentLocation={currentLocation}
-        destinationLocation={
-          activeOrders.length > 0 
-            ? (activeOrders[0].status === "goingToRestaurant" || 
-               activeOrders[0].status === "arrivedAtRestaurant" || 
-               activeOrders[0].status === "pickedUp")
-              ? activeOrders[0].restaurant.location
-              : activeOrders[0].customerLocation
-            : undefined
-        }
-        showNavigationButton={activeOrders.length > 0}
-        height={500}
-      />
+      <View style={styles.mapContainer}>
+        <MapView
+          style={styles.map}
+          initialRegion={initialRegion}
+        >
+          <Marker
+            coordinate={{
+              latitude: 10.762622,
+              longitude: 106.660172,
+            }}
+            title="Your Location"
+          />
+        </MapView>
+        
+        <View style={styles.searchBar}>
+          <Search size={20} color={colors.subtext} />
+          <Text style={styles.searchText}>Find destinations</Text>
+        </View>
+      </View>
       
-      <View style={styles.statusContainer}>
-        <View style={styles.statusHeader}>
-          <Text style={styles.statusTitle}>Status</Text>
-          <TouchableOpacity 
-            style={[
-              styles.statusToggle, 
-              user?.isOnline ? styles.statusOnline : styles.statusOffline
-            ]}
-            onPress={handleToggleOnlineStatus}
-          >
-            <Power size={16} color="white" />
-            <Text style={styles.statusToggleText}>
-              {user?.isOnline ? "Online" : "Offline"}
-            </Text>
+      <View style={styles.bottomSheet}>
+        <View style={styles.bottomSheetHandle} />
+        
+        <View style={styles.currentLocationContainer}>
+          <MapPin size={20} color={colors.primary} />
+          <Text style={styles.currentLocationText}>{selectedAddress}</Text>
+          <TouchableOpacity style={styles.navigationButton}>
+            <Navigation size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
         
-        <View style={styles.statusInfo}>
-          <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Current Location</Text>
-            <Text style={styles.statusValue}>
-              {currentLocation 
-                ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
-                : "Unknown"}
-            </Text>
-          </View>
-          
-          <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Active Orders</Text>
-            <Text style={styles.statusValue}>{activeOrders.length}</Text>
-          </View>
-        </View>
+        <Text style={styles.sectionTitle}>Nearby Pickup Locations</Text>
         
-        {activeOrders.length > 0 && (
-          <View style={styles.activeOrderContainer}>
-            <View style={styles.activeOrderHeader}>
-              <Text style={styles.activeOrderTitle}>Current Delivery</Text>
-              <Text style={styles.activeOrderNumber}>
-                {activeOrders[0].orderNumber}
-              </Text>
+        {nearbyLocations.map(location => (
+          <TouchableOpacity 
+            key={location.id}
+            style={styles.locationItem}
+            onPress={() => setSelectedAddress(location.address)}
+          >
+            <View style={styles.locationContent}>
+              <Text style={styles.locationName}>{location.name}</Text>
+              <Text style={styles.locationAddress}>{location.address}</Text>
             </View>
-            
-            <View style={styles.activeOrderDetails}>
-              <Text style={styles.activeOrderLabel}>
-                {activeOrders[0].status === "goingToRestaurant" || 
-                 activeOrders[0].status === "arrivedAtRestaurant"
-                  ? "Restaurant"
-                  : "Customer"}
-              </Text>
-              <Text style={styles.activeOrderValue}>
-                {activeOrders[0].status === "goingToRestaurant" || 
-                 activeOrders[0].status === "arrivedAtRestaurant"
-                  ? activeOrders[0].restaurant.name
-                  : activeOrders[0].customer.name}
-              </Text>
-              <Text style={styles.activeOrderAddress}>
-                {activeOrders[0].status === "goingToRestaurant" || 
-                 activeOrders[0].status === "arrivedAtRestaurant"
-                  ? activeOrders[0].restaurant.location.address
-                  : activeOrders[0].customerLocation.address}
-              </Text>
-            </View>
-            
-            <Button
-              title="View Order Details"
-              onPress={handleViewActiveOrder}
-              fullWidth
-              variant="primary"
-              style={styles.viewOrderButton}
-              leftIcon={<Navigation size={18} color="white" />}
-            />
-          </View>
-        )}
+            <Text style={styles.locationDistance}>{location.distance}</Text>
+          </TouchableOpacity>
+        ))}
+        
+        <TouchableOpacity style={styles.availabilityButton}>
+          <Text style={styles.availabilityText}>I'm Available for Delivery</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -149,107 +97,115 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  statusContainer: {
-    flex: 1,
+  mapContainer: {
+    width: '100%',
+    height: '60%',
+  },
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+  searchBar: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
     backgroundColor: colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -24,
-    padding: 24,
-    shadowColor: "#000",
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchText: {
+    marginLeft: 10,
+    color: colors.subtext,
+    fontSize: 16,
+  },
+  bottomSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingTop: 10,
+    height: '45%',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
   },
-  statusHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 15,
   },
-  statusTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+  currentLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+  },
+  currentLocationText: {
+    flex: 1,
+    marginLeft: 10,
+    color: colors.text,
+    fontSize: 16,
+  },
+  navigationButton: {
+    backgroundColor: colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
     color: colors.text,
   },
-  statusToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  locationItem: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  statusOnline: {
-    backgroundColor: colors.success,
-  },
-  statusOffline: {
-    backgroundColor: colors.subtext,
-  },
-  statusToggleText: {
-    color: "white",
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  statusInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  statusItem: {
+  locationContent: {
     flex: 1,
   },
-  statusLabel: {
+  locationName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  locationAddress: {
     fontSize: 14,
     color: colors.subtext,
-    marginBottom: 4,
+    marginTop: 4,
   },
-  statusValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  activeOrderContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  activeOrderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  activeOrderTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  activeOrderNumber: {
+  locationDistance: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: "600",
+    fontWeight: '500',
   },
-  activeOrderDetails: {
-    marginBottom: 16,
+  availabilityButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 10,
   },
-  activeOrderLabel: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginBottom: 4,
-  },
-  activeOrderValue: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 2,
-  },
-  activeOrderAddress: {
-    fontSize: 14,
-    color: colors.subtext,
-  },
-  viewOrderButton: {
-    marginTop: 8,
+  availabilityText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

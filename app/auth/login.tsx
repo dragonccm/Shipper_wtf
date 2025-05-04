@@ -19,8 +19,8 @@ import { useAuthStore } from "@/store/authStore";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const login = useAuthStore((state) => state.login);
-  const isLoading = useAuthStore((state) => state.isLoading);
+  // const login = useAuthStore((state) => state.login);
+  // const isLoading = useAuthStore((state) => state.isLoading);
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,14 +48,14 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validateForm()) return;
     
-    const success = await login(email, password);
+    // const success = await login(email, password);
     
-    if (!success) {
-      setErrors({
-        email: "Invalid credentials",
-        password: "Invalid credentials"
-      });
-    }
+    // if (!success) {
+    //   setErrors({
+    //     email: "Invalid credentials",
+    //     password: "Invalid credentials"
+    //   });
+    // }
   };
   
   const handleRegister = () => {
@@ -112,7 +112,7 @@ export default function LoginScreen() {
           <Button
             title="Login"
             onPress={handleLogin}
-            loading={isLoading}
+            loading={false}
             fullWidth
             style={styles.loginButton}
           />
