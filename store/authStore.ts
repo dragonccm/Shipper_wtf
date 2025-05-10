@@ -2,21 +2,34 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { User, Location } from "../types";
-import { authAPI } from "../services/api";
+import {
+  saveAccessToken,
+  getAccessToken,
+  removeAccessToken,
+} from "../storange/auth.storage";
+
+// In ra console toàn bộ request và response
+const logRequestResponse = async (request: string, response: any) => {
+  console.log("Request:", request);
+  console.log("Response:", response);
+};
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  token?: string | null;
 
-  // Actions
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, phone: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  // Auth actions
+  login: (phoneNumber: string, password: string) => Promise<boolean>;
+  register: (phoneNumber: string, password: string, name: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<boolean>;
+  setUser: (user: User) => void;
+
+  // User actions
   updateUserLocation: (location: Location) => void;
   toggleOnlineStatus: () => void;
-  checkAuth: () => Promise<boolean>;
-  updateProfile: (profileData: { name: string; email: string; phone: string }) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -25,41 +38,79 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      token: null,
+
+      setUser: (user: User) => {
+        set({
+          user,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      },
 
       checkAuth: async () => {
         set({ isLoading: true });
         try {
-          const { isAuthenticated, user } = await authAPI.checkAuth();
-          if (isAuthenticated && user) {
-            set({
-              user,
-              isAuthenticated: true,
-              isLoading: false
+          const token = await getAccessToken();
+          if (token) {
+            const res = await fetch(" https://3025-14-240-55-19.ngrok-free.app/api/check-auth", {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
             });
-            return true;
-          } else {
-            set({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false
-            });
-            return false;
+            // Check if the response is succes
+            const data = await res.json();
+            console.log("checkAuth response:", data);
+
+            if (data.EC === "0" && data.DT) {
+              set({
+                user: data.DT,
+                isAuthenticated: true,
+                isLoading: false,
+                token,
+              });
+              return true;
+            }
           }
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            token: null,
+          });
+          return false;
         } catch (error) {
+          console.error("checkAuth error:", error);
           set({ isLoading: false });
           return false;
         }
       },
 
-      login: async (email: string, password: string) => {
+      login: async (phoneNumber: string, password: string) => {
+        console.log("Attempting login with:", { phoneNumber });
         set({ isLoading: true });
         try {
-          const result = await authAPI.login(email, password);
-          if (result.success && result.user) {
+          const res = await fetch(" https://3025-14-240-55-19.ngrok-free.app", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              valueLogin: phoneNumber,
+              password,
+            }),
+          });
+
+          const data = await res.json();
+          console.log("Login response:", data);
+
+          if (data.EC === "0" && data.DT) {
+            await saveAccessToken(data.DT.access_token);
             set({
-              user: result.user,
+              user: data.DT.account,
               isAuthenticated: true,
-              isLoading: false
+              isLoading: false,
+              token: data.DT.access_token,
             });
             return true;
           } else {
@@ -67,20 +118,38 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
         } catch (error) {
+          console.error("login error:", error);
           set({ isLoading: false });
           return false;
         }
       },
 
-      register: async (name: string, email: string, phone: string, password: string) => {
+      register: async (phoneNumber: string, password: string, name: string) => {
+        console.log("Attempting register with:", { phoneNumber, name });
         set({ isLoading: true });
         try {
-          const result = await authAPI.register(name, email, phone, password);
-          if (result.success && result.user) {
+          const res = await fetch(" https://3025-14-240-55-19.ngrok-free.app/api/register_phone", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              phone: phoneNumber,
+              password,
+              name,
+            }),
+          });
+
+          const data = await res.json();
+          console.log("Register response:", data);
+
+          if (data.EC === "0" && data.DT) {
+            await saveAccessToken(data.DT.access_token);
             set({
-              user: result.user,
+              user: data.DT.account,
               isAuthenticated: true,
-              isLoading: false
+              isLoading: false,
+              token: data.DT.access_token,
             });
             return true;
           } else {
@@ -88,66 +157,51 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
         } catch (error) {
+          console.error("register error:", error);
           set({ isLoading: false });
           return false;
         }
       },
 
       logout: async () => {
-        await authAPI.logout();
-        set({
-          user: null,
-          isAuthenticated: false
-        });
+        try {
+          const token = await getAccessToken();
+          if (token) {
+            await fetch(" https://3025-14-240-55-19.ngrok-free.app/api/logout", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+          }
+          await removeAccessToken();
+          set({
+            user: null,
+            isAuthenticated: false,
+            token: null,
+          });
+        } catch (error) {
+          console.error("logout error:", error);
+        }
       },
 
       updateUserLocation: (location: Location) => {
-        const { user } = get();
-        if (user) {
-          set({
-            user: {
-              ...user,
-              currentLocation: location
-            }
-          });
-        }
+        set((state) => ({
+          user: state.user ? { ...state.user, location } : null,
+        }));
       },
 
       toggleOnlineStatus: () => {
-        const { user } = get();
-        if (user) {
-          set({
-            user: {
-              ...user,
-              isOnline: !user.isOnline
-            }
-          });
-        }
+        set((state) => ({
+          user: state.user
+            ? { ...state.user, isOnline: !state.user.isOnline }
+            : null,
+        }));
       },
-
-      updateProfile: async (profileData) => {
-        const { user } = get();
-        if (user) {
-          try {
-            const updatedUser = await authAPI.updateProfile(profileData);
-            if (updatedUser) {
-              set({ user: updatedUser });
-              return true;
-            }
-          } catch (error) {
-            console.error("Failed to update profile", error);
-          }
-        }
-        return false;
-      }
     }),
     {
-      name: "shipper-auth-storage",
+      name: "auth-storage",
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated
-      })
     }
   )
 );

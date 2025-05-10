@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Button } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, Bell, Trash2 } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { NavigationBar } from "@/components/NavigationBar";
+import { useAuthStore } from "@/store/authStore";
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   
   // Mock data - replace with actual data from your API/store
   const [notificationSettings, setNotificationSettings] = useState([
@@ -41,6 +44,31 @@ export default function NotificationsScreen() {
       ]
     );
   };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Thông báo</Text>
+        <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
+        <Text style={styles.emptyText}>Không có dữ liệu</Text>
+        <Button 
+          title="Đăng nhập / Đăng ký" 
+          onPress={handleLoginPress}
+          style={styles.button}
+        />
+        <Button 
+          title="Đăng xuất" 
+          onPress={handleLogout}
+          style={styles.button}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -115,5 +143,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  subtitle: {
+    fontSize: 18,
+    color: colors.subtext,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.subtext,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
   },
 });

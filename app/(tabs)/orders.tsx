@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import React, { useState,useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Button } from 'react-native';
 import { colors } from '@/constants/colors';
 import { Package, Clock, ChevronRight, MapPin, Phone } from 'lucide-react-native';
 // Đã loại bỏ: import { useOrderStore } from '@/store/orderStore';
@@ -7,7 +7,16 @@ import { Package, Clock, ChevronRight, MapPin, Phone } from 'lucide-react-native
 export default function OrdersScreen() {
   // Đã loại bỏ: const { activeOrders } = useOrderStore();
   const [selectedOrder, setSelectedOrder] = useState(null);
-  
+    const fetchUsers = async () => {
+      console.log("dkfd")
+      try {
+        const response = await fetch("http://10.0.2.2:8000/api/getalluser");
+        const data = await response.json();  // Chuyển đổi dữ liệu sang JSON
+        console.log("Danh sách user:", data); // In ra console
+      } catch (error) {
+        console.error("Lỗi khi fetch user:", error); // In lỗi nếu có
+      }
+    };
   // Dữ liệu mẫu thay thế cho activeOrders
   const sampleOrders = [
     {
@@ -39,6 +48,7 @@ export default function OrdersScreen() {
       style={styles.orderCard}
       onPress={() => setSelectedOrder(selectedOrder?.id === item.id ? null : item)}
     >
+         <Button title="Lấy danh sách user" onPress={fetchUsers} />
       <View style={styles.orderHeader}>
         <View style={styles.statusIndicator}>
           <Package size={20} color={colors.white} />

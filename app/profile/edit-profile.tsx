@@ -11,6 +11,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const updateProfile = useAuthStore((state) => state.updateProfile);
+  const logout = useAuthStore((state) => state.logout);
   
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -23,8 +24,23 @@ export default function EditProfileScreen() {
   
   // Nếu người dùng chưa đăng nhập, chuyển hướng về trang profile
   if (!user) {
-    router.replace('/profile');
-    return null;
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Chỉnh sửa thông tin</Text>
+        <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
+        <Text style={styles.emptyText}>Không có dữ liệu</Text>
+        <Button 
+          title="Đăng nhập / Đăng ký" 
+          onPress={handleLoginPress}
+          style={styles.button}
+        />
+        <Button 
+          title="Đăng xuất" 
+          onPress={handleLogout}
+          style={styles.button}
+        />
+      </View>
+    );
   }
 
   const handleSave = async () => {
@@ -40,6 +56,11 @@ export default function EditProfileScreen() {
     
     await updateProfile({ name, email, phone });
     router.back();
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
   };
 
   return (

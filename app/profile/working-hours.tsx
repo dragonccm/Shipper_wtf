@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Button } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, Clock, Plus } from "lucide-react-native";
 import { colors } from "@/constants/colors";
+import { useAuthStore } from "@/store/authStore";
 
 export default function WorkingHoursScreen() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   
   // Mock data - replace with actual data from your API/store
   const [workingHours, setWorkingHours] = useState([
@@ -17,6 +20,31 @@ export default function WorkingHoursScreen() {
   const handleAddHours = () => {
     // Logic to add new working hours
   };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Giờ làm việc</Text>
+        <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
+        <Text style={styles.emptyText}>Không có dữ liệu</Text>
+        <Button 
+          title="Đăng nhập / Đăng ký" 
+          onPress={handleLoginPress}
+          style={styles.button}
+        />
+        <Button 
+          title="Đăng xuất" 
+          onPress={handleLogout}
+          style={styles.button}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -116,5 +144,22 @@ const styles = StyleSheet.create({
   editText: {
     color: colors.primary,
     fontWeight: "500",
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.subtext,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
 });

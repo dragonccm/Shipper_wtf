@@ -1,131 +1,212 @@
-import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
-  ScrollView,
-  StatusBar
-} from "react-native";
-import { useRouter } from "expo-router";
-import { Mail, Lock } from "lucide-react-native";
-import { Input } from "@/components/Input";
-import { Button } from "@/components/Button";
-import { colors } from "@/constants/colors";
-import { useAuthStore } from "@/store/authStore";
+} from 'react-native';
+import { useRouter, Stack } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft, Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
+import { useAuthStore } from '@/store/useAuthStore';
+import { colors } from '@/constants/colors';
 
 export default function LoginScreen() {
   const router = useRouter();
-  // const login = useAuthStore((state) => state.login);
-  // const isLoading = useAuthStore((state) => state.isLoading);
-  
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  
-  const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
-    
-    if (!email) {
-      newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Email is invalid";
+  const { isAuthenticated, isLoading: authLoading, setAuthenticated, setUser, setToken } = useAuthStore();
+
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
     }
-    
+  }, [isAuthenticated]);
+
+  const formatPhoneNumber = (text: string) => {
+    // Remove non-numeric characters
+    const cleaned = text.replace(/\D/g, '');
+
+    // Format as Vietnamese phone number
+    let formatted = cleaned;
+    if (cleaned.length > 0) {
+      if (cleaned.length <= 4) {
+        formatted = cleaned;
+      } else if (cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 4)} ${cleaned.slice(4)}`;
+      } else {
+        formatted = `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 10)}`;
+      }
+    }
+
+    setPhoneNumber(formatted);
+  };
+
+  const validatePhoneNumber = (number: string) => {
+    const cleanedNumber = number.replace(/\s/g, '');
+    return cleanedNumber.length >= 9 && cleanedNumber.length <= 10;
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!validatePhoneNumber(phoneNumber)) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
     if (!password) {
-      newErrors.password = "Password is required";
-    } else if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+      setError('Please enter your password');
+      return;
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    setError(null);
+
+    try {
+      // Normalize phone number by removing spaces and non-numeric characters
+      const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
+
+      // Login API call
+      const loginRes = await fetch("https://3025-14-240-55-19.ngrok-free.app/api/login_phone", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          valueLogin: normalizedPhone,
+          password,
+        }),
+      });
+
+      const loginData = await loginRes.json();
+      console.log("Login response:", loginData);
+
+      if (loginData.EC === "0" && loginData.DT) {
+        await setToken(loginData.DT.access_token);
+        setUser(loginData.DT.account);
+        setAuthenticated(true);
+        router.replace('/');
+      } else {
+        setError(loginData.EM || 'Invalid phone number or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An error occurred during login. Please try again.');
+    }
   };
-  
-  const handleLogin = async () => {
-    if (!validateForm()) return;
-    
-    // const success = await login(email, password);
-    
-    // if (!success) {
-    //   setErrors({
-    //     email: "Invalid credentials",
-    //     password: "Invalid credentials"
-    //   });
-    // }
-  };
-  
-  const handleRegister = () => {
-    router.push("/auth/register");
-  };
-  
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <Stack.Screen
+        options={{
+          title: "Login",
+          headerLeft: () => (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ChevronLeft size={24} color={colors.text} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
-        <View style={styles.header}>
+        <View style={styles.logoContainer}>
           <Image
-            source={{ uri: "https://images.unsplash.com/photo-1526367790999-0150786686a2?q=80&w=2071&auto=format&fit=crop" }}
+            source={{ uri: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Zm9vZHxlbnwwfHwwfHx8MA%3D%3D' }}
             style={styles.logo}
           />
-          <Text style={styles.title}>Shipper App</Text>
-          <Text style={styles.subtitle}>Login to your account</Text>
         </View>
-        
-        <View style={styles.form}>
-          <Input
-            label="Email"
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-            error={errors.email}
-            leftIcon={<Mail size={20} color={colors.subtext} />}
-          />
-          
-          <Input
-            label="Password"
-            placeholder="Enter your password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            error={errors.password}
-            leftIcon={<Lock size={20} color={colors.subtext} />}
-          />
-          
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+
+        <Text style={styles.title}>Login</Text>
+        <Text style={styles.subtitle}>
+          Enter your phone number and password to login.
+        </Text>
+
+        <View style={styles.inputContainer}>
+          <View style={styles.phoneInputContainer}>
+            <Phone size={20} color={colors.subtext} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone Number"
+              placeholderTextColor={colors.subtext}
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              onChangeText={formatPhoneNumber}
+              maxLength={13}
+            />
+          </View>
+
+          <View style={styles.passwordInputContainer}>
+            <Lock size={20} color={colors.subtext} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.subtext}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? (
+                <EyeOff size={20} color={colors.subtext} />
+              ) : (
+                <Eye size={20} color={colors.subtext} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {error && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!phoneNumber || !password || authLoading) && styles.disabledButton
+            ]}
+            onPress={handlePasswordLogin}
+            disabled={!phoneNumber || !password || authLoading}
+          >
+            {authLoading ? (
+              <ActivityIndicator color={colors.background} size="small" />
+            ) : (
+              <Text style={styles.continueButtonText}>
+                Login
+              </Text>
+            )}
           </TouchableOpacity>
-          
-          <Button
-            title="Login"
-            onPress={handleLogin}
-            loading={false}
-            fullWidth
-            style={styles.loginButton}
-          />
-        </View>
-        
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
-          <TouchableOpacity onPress={handleRegister}>
-            <Text style={styles.registerText}>Register</Text>
+
+          <TouchableOpacity
+            style={styles.registerButton}
+            onPress={() => router.push('/auth/register')}
+          >
+            <Text style={styles.registerButtonText}>
+              Don't have an account? Register
+            </Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <Text style={styles.termsText}>
+          By continuing, you agree to our Terms of Service and Privacy Policy.
+        </Text>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -134,56 +215,101 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 24,
-    justifyContent: "center",
+  backButton: {
+    padding: 8,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 40,
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginVertical: 30,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
-    marginBottom: 16,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
     color: colors.subtext,
+    marginBottom: 30,
+    lineHeight: 22,
   },
-  form: {
-    marginBottom: 24,
+  inputContainer: {
+    marginBottom: 30,
   },
-  forgotPassword: {
-    alignSelf: "flex-end",
-    marginBottom: 24,
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 50,
+    marginBottom: 16,
   },
-  forgotPasswordText: {
-    color: colors.primary,
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 50,
+    marginBottom: 16,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  eyeIcon: {
+    padding: 8,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
+  errorText: {
     fontSize: 14,
+    color: colors.error,
+    marginBottom: 16,
   },
-  loginButton: {
-    marginTop: 8,
+  continueButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
+  disabledButton: {
+    backgroundColor: colors.subtext,
   },
-  footerText: {
+  continueButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.background,
+  },
+  termsText: {
+    fontSize: 12,
     color: colors.subtext,
-    marginRight: 4,
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  registerText: {
+  registerButton: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  registerButtonText: {
+    fontSize: 14,
     color: colors.primary,
-    fontWeight: "600",
+    fontWeight: '500',
   },
 });

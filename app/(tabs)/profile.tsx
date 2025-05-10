@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/store/authStore';
@@ -7,7 +7,15 @@ import { User } from 'lucide-react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const logout = useAuthStore((state) => state.logout);
+  const { user, logout, checkAuth } = useAuthStore((state) => ({
+    user: state.user,
+    logout: state.logout,
+    checkAuth: state.checkAuth
+  }));
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -20,8 +28,14 @@ export default function ProfileScreen() {
         <View style={styles.avatarContainer}>
           <User size={50} color={colors.primary} />
         </View>
-        <Text style={styles.userName}>Shipper Name</Text>
-        <Text style={styles.userDetails}>ID: 12345 • Active</Text>
+        {user ? (
+          <>
+            <Text style={styles.userName}>{user.name}</Text>
+            <Text style={styles.userDetails}>ID: {user.id} • {user.isOnline ? 'Active' : 'Offline'}</Text>
+          </>
+        ) : (
+          <Text style={styles.userName}>Loading...</Text>
+        )}
       </View>
 
       <View style={styles.sectionContainer}>

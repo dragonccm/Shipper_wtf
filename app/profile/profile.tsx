@@ -50,7 +50,7 @@ export default function ProfileScreen() {
       <View style={styles.tabContainer}>
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => router.push('/profile/edit')}
+          onPress={() => router.push('/profile/edit-profile')}
         >
           <Feather name="edit" size={24} color={colors.text} />
           <Text style={styles.tabText}>Chỉnh sửa thông tin</Text>
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => router.push('/profile/orders')}
+          onPress={() => router.push('/profile/earnings-history')}
         >
           <Feather name="shopping-bag" size={24} color={colors.text} />
           <Text style={styles.tabText}>Đơn hàng của tôi</Text>

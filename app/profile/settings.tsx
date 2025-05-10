@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Button } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, Settings, Moon, Bell, Lock, HelpCircle } from "lucide-react-native";
 import { colors } from "@/constants/colors";
@@ -7,7 +7,8 @@ import { useAuthStore } from "@/store/authStore";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  // const logout = useAuthStore((state) => state.logout);
+  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
   
   // Mock data - replace with actual data from your API/store
   const [settings, setSettings] = useState([
@@ -23,6 +24,31 @@ export default function SettingsScreen() {
       )
     );
   };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Cài đặt</Text>
+        <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
+        <Text style={styles.emptyText}>Không có dữ liệu</Text>
+        <Button 
+          title="Đăng nhập / Đăng ký" 
+          onPress={handleLoginPress}
+          style={styles.button}
+        />
+        <Button 
+          title="Đăng xuất" 
+          onPress={handleLogout}
+          style={styles.button}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -56,10 +82,7 @@ export default function SettingsScreen() {
         
         <TouchableOpacity 
           style={styles.logoutButton}
-          onPress={() => {
-            // logout();
-            router.replace('/');
-          }}
+          onPress={handleLogout}
         >
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
@@ -121,5 +144,24 @@ const styles = StyleSheet.create({
   logoutText: {
     color: colors.white,
     fontWeight: "600",
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 16,
   },
 });

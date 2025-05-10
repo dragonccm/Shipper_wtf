@@ -1,11 +1,14 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Button } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, DollarSign } from "lucide-react-native";
 import { colors } from "@/constants/colors";
+import { useAuthStore } from "@/store/authStore";
 
 export default function EarningsHistoryScreen() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   
   // Mock data - replace with actual data from your API/store
   const earningsData = [
@@ -13,6 +16,31 @@ export default function EarningsHistoryScreen() {
     { id: 2, date: '2023-10-02', amount: 180000, deliveries: 6 },
     { id: 3, date: '2023-10-03', amount: 120000, deliveries: 4 },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Lịch sử thu nhập</Text>
+        <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
+        <Text style={styles.emptyText}>Không có dữ liệu</Text>
+        <Button 
+          title="Đăng nhập / Đăng ký" 
+          onPress={handleLoginPress}
+          style={styles.button}
+        />
+        <Button 
+          title="Đăng xuất" 
+          onPress={handleLogout}
+          style={styles.button}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -120,5 +148,23 @@ const styles = StyleSheet.create({
   earningDeliveries: {
     fontSize: 12,
     color: colors.subtext,
+  },
+  button: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.subtext,
+    marginBottom: 16,
   },
 });
