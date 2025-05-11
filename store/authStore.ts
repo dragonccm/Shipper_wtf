@@ -53,7 +53,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const token = await getAccessToken();
           if (token) {
-            const res = await fetch("  https://665c-14-240-55-19.ngrok-free.app/api/check-auth", {
+            const res = await fetch("https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/check-auth", {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -90,7 +90,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting login with:", { phoneNumber });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://665c-14-240-55-19.ngrok-free.app", {
+          const res = await fetch("  https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -128,7 +128,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting register with:", { phoneNumber, name });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://665c-14-240-55-19.ngrok-free.app/api/register_phone", {
+          const res = await fetch("  https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/register_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -167,7 +167,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const token = await getAccessToken();
           if (token) {
-            await fetch("  https://665c-14-240-55-19.ngrok-free.app/api/logout", {
+            await fetch("  https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/logout", {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${token}`,

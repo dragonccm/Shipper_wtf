@@ -15,46 +15,77 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { colors } from "@/constants/colors";
 // Đã loại bỏ: import { useOrderStore } from "@/store/orderStore";
-import { OrderStatusBadge } from "@/components/OrderStatusBadge";
-import { OrderStatusStepper } from "@/components/OrderStatusStepper";
-import { CustomMapView } from "@/components/MapView";
 import { Button } from "@/components/Button";
-import { NavigationBar } from "@/components/NavigationBar";
 import { formatCurrency, formatDate, formatPhoneNumber } from "@/utils/formatters";
-import { OrderStatus, Location } from "@/types";
+import { OrderStatus, Location as LocationType } from "@/types";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 
 interface Order {
   _id: string;
-  status: OrderStatus;
-  createdAt: string;
+  user: {
+    _id: string;
+    phone: string;
+    username: string;
+  };
+  address: {
+    name: string;
+    phoneNumber: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
   restaurant?: {
-    name?: string;
-    photoUrl?: string;
-    location?: Location;
+    _id: string;
+    name: string;
+    phone: string;
+    location: {
+      latitude: number;
+      longitude: number;
+    };
+    address: string;
   };
-  customer?: {
-    name?: string;
-    phone?: string;
-    photoUrl?: string;
-    location?: Location;
-  };
-  items?: Array<{
-    _id?: string;
-    name?: string;
+  items: Array<{
+    _id: string;
+    food: {
+      _id: string;
+      restaurant: {
+        address: string;
+        _id: string;
+        name: string;
+        phone: string;
+      };
+      name: string;
+      price: number;
+    };
     quantity: number;
     price: number;
+    toppings?: Array<{
+      topping: string;
+      item: Array<{
+        id: string;
+        price: number;
+        _id: string;
+      }>;
+      _id: string;
+    }>;
   }>;
   totalPrice: number;
   shippingFee: number;
   finalAmount: number;
   paymentMethod: string;
   paymentStatus: string;
+  status: OrderStatus;
   note?: string;
   discount?: {
+    voucherId?: string;
     amount: number;
   };
+  createdAt?: string;
+  updatedAt?: string;
+  shipper?: string;
+  isRated?: boolean;
+  __v?: number;
 }
 
 export default function OrderDetailScreen() {
@@ -62,7 +93,7 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<LocationType | null>(null);
   
   // Lấy vị trí hiện tại của shipper
   useEffect(() => {
@@ -83,22 +114,52 @@ export default function OrderDetailScreen() {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/getorder/${id}`, {
+        const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
           }
         });
-
         if (!response.ok) {
           throw new Error('Failed to fetch order');
         }
-
+        
         const data = await response.json();
-        console.log('Order data received:', data);
-
+        console.log("Update status response:", JSON.stringify(data, null, 2)); 
         if (data.EC === "0" && data.DT) {
-          setOrder(data.DT);
+          const orderData: Order = {
+            ...data.DT,
+            user: data.DT.user,
+            customer: data.DT.customer,
+            restaurant: {
+              ...data.DT.items[0]?.food?.restaurant,
+              location: {
+                latitude: data.DT.items[0]?.food?.restaurant?.location?.coordinates[1] || 0,
+                longitude: data.DT.items[0]?.food?.restaurant?.location?.coordinates[0] || 0
+              }
+            },
+            items: data.DT.items.map((item: any) => ({
+              ...item,
+              food: {
+                _id: item.food?._id,
+                name: item.food?.name,
+                price: item.food?.price,
+                restaurant: item.food?.restaurant
+              },
+              toppings: item.toppings?.map((topping: any) => ({
+                ...topping,
+                item: topping.item
+              })) || []
+            })),
+            discount: data.DT.discount,
+            status: data.DT.orderStatus,
+            createdAt: data.DT.createdAt,
+            updatedAt: data.DT.updatedAt,
+            isRated: data.DT.isRated,
+            shipper: data.DT.shipper,
+            __v: data.DT.__v
+          };
+          setOrder(orderData);
         } else {
           throw new Error(data.EM || 'Failed to fetch order');
         }
@@ -134,42 +195,6 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleOpenDirections = () => {
-    if (!order) return;
-    
-    // Xác định điểm đến dựa trên trạng thái đơn hàng
-    const destination = order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant" 
-      ? order.restaurant?.location 
-      : order.customer?.location;
-    
-    if (!destination?.latitude || !destination?.longitude) {
-      Alert.alert("Thông báo", "Không có thông tin vị trí để chỉ đường");
-      return;
-    }
-    
-    if (!currentLocation) {
-      Alert.alert("Thông báo", "Đang lấy vị trí hiện tại của bạn. Vui lòng thử lại sau.");
-      return;
-    }
-    
-    const label = order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant"
-      ? order.restaurant?.name || "Nhà hàng"
-      : order.customer?.name || "Khách hàng";
-    
-    const scheme = Platform.select({ ios: "maps:0,0?q=", android: "geo:0,0?q=" });
-    const latLng = `${destination.latitude},${destination.longitude}`;
-    const url = Platform.select({
-      ios: `maps://app?saddr=${currentLocation.latitude},${currentLocation.longitude}&daddr=${latLng}`,
-      android: `google.navigation:q=${latLng}&mode=d`,
-      default: `https://www.google.com/maps/dir/?api=1&origin=${currentLocation.latitude},${currentLocation.longitude}&destination=${latLng}`
-    });
-    
-    Linking.openURL(url).catch(err => {
-      console.error('Error opening maps:', err);
-      Alert.alert("Lỗi", "Không thể mở ứng dụng bản đồ");
-    });
-  };
-
   const handleUpdateStatus = async () => {
     if (!order) return;
     if (Platform.OS !== "web") {
@@ -196,7 +221,7 @@ export default function OrderDetailScreen() {
             text: "Confirm",
             onPress: async () => {
               try {
-                const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/shipper/order/${order._id}/status`, {
+                const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/shipper/order/${order._id}/status`, {
                   method: "PUT",
                   headers: {
                     "Content-Type": "application/json"
@@ -227,7 +252,7 @@ export default function OrderDetailScreen() {
       );
     } else {
       try {
-        const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/shipper/order/${order._id}/status`, {
+        const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/shipper/order/${order._id}/status`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json"
@@ -382,13 +407,16 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Thông tin nhà hàng</Text>
-            {showRestaurantLocation && (
+            {order?.restaurant?.location?.latitude && order?.restaurant?.location?.longitude && (
               <TouchableOpacity
                 style={styles.locationButton}
-                onPress={handleOpenDirections}
+                onPress={() => {
+                  const url = `https://www.google.com/maps/dir/?api=1&destination=${order.restaurant.location.latitude},${order.restaurant.location.longitude}`;
+                  Linking.openURL(url);
+                }}
               >
                 <MaterialIcons name="directions" size={16} color="#fff" />
-                <Text style={styles.locationButtonText}>Chỉ đường</Text>
+                <Text style={styles.locationButtonText}>Chỉ đường đến nhà hàng</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -401,15 +429,21 @@ export default function OrderDetailScreen() {
               />
             </View>
             <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>{order.restaurant?.name || 'Nhà hàng không xác định'}</Text>
-              <Text style={styles.restaurantAddress}>{order.restaurant?.location?.address || 'Không có địa chỉ'}</Text>
+              <Text style={styles.restaurantName}>{order.items[0].food.restaurant.name || 'Nhà hàng không xác định'}</Text>
+              {order.restaurant?.location?.latitude && order.restaurant?.location?.longitude ? (
+                <Text style={styles.restaurantAddress}>
+                  Tọa độ: {order.restaurant.location.latitude}, {order.restaurant.location.longitude}
+                </Text>
+              ) : (
+                <Text style={styles.restaurantAddress}>{order.restaurant?.location?.address || 'Không có địa chỉ'}</Text>
+              )}
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(order.restaurant?.phone || '')}
+                onPress={() => handleCall(order.items[0].food.restaurant.phone || '')}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
-                  {formatPhoneNumber(order.restaurant?.phone || '')}
+                  {formatPhoneNumber(order.items[0].food.restaurant.phone || '')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -420,23 +454,26 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
-            {showCustomerLocation && (
+            {order?.address?.latitude && order?.address?.longitude && (
               <TouchableOpacity
                 style={styles.locationButton}
-                onPress={handleOpenDirections}
+                onPress={() => {
+                  const url = `https://www.google.com/maps/dir/?api=1&destination=${order.address.latitude},${order.address.longitude}`;
+                  Linking.openURL(url);
+                }}
               >
                 <MaterialIcons name="directions" size={16} color="#fff" />
-                <Text style={styles.locationButtonText}>Chỉ đường</Text>
+                <Text style={styles.locationButtonText}>Chỉ đường đến khách</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.customerInfo}>
             <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>{order.customer?.name || 'Khách hàng không xác định'}</Text>
+              <Text style={styles.customerName}>{order.address?.name || 'Khách hàng không xác định'}</Text>
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(order.customer?.phone || '')}
+                onPress={() => handleCall(order.address?.phoneNumber || '')}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
@@ -465,8 +502,8 @@ export default function OrderDetailScreen() {
                   <Text style={styles.quantityText}>{item.quantity}x</Text>
                 </View>
                 <View style={styles.orderItemDetails}>
-                  <Text style={styles.orderItemName}>{item.name || `Món ${index + 1}`}</Text>
-                  <Text style={styles.orderItemPrice}>{formatCurrency(item.price)}</Text>
+                  <Text style={styles.orderItemName}>{item.food?.name || `Món ${index + 1}`}</Text>
+                  <Text style={styles.orderItemPrice}>{formatCurrency(item.food?.price || 0)}</Text>
                 </View>
               </View>
               {index < (order.items?.length || 0) - 1 && <View style={styles.itemDivider} />}
@@ -909,6 +946,14 @@ const styles = StyleSheet.create({
     color: "#4CAF50",
   },
   orderInfoRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  infoText: {
     flexDirection: "row",
     marginBottom: 8,
   },

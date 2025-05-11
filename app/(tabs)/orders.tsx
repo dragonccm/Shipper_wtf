@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Button, Alert, Platform, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  Button,
+  Alert,
+  Platform,
+  Linking,
+} from 'react-native';
 import { useOrderStore } from '@/store/orderStore';
 import { colors } from '@/constants/colors';
 import { Package, Clock, ChevronRight, MapPin, Phone } from 'lucide-react-native';
@@ -9,196 +20,128 @@ import { Order } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { useRouter } from 'expo-router';
 
-export default function OrdersScreen() {
+export default function OrdersScreen(): JSX.Element {
   const router = useRouter();
   const { acceptOrder, orders } = useOrderStore();
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('');
 
-  const checkLocationSettings = async () => {
+  // Kiểm tra cài đặt vị trí và quyền
+  const checkLocationSettings = async (): Promise<boolean> => {
     try {
-      // Kiểm tra trạng thái dịch vụ vị trí
       const serviceEnabled = await Location.hasServicesEnabledAsync();
-      console.log('Location services enabled:', serviceEnabled);
-      
       if (!serviceEnabled) {
         setLocationStatus('Dịch vụ vị trí bị tắt');
         return false;
       }
-
-      // Kiểm tra quyền truy cập vị trí
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
-      console.log('Existing location permission status:', existingStatus);
-      setLocationStatus(`Trạng thái quyền: ${existingStatus}`);
-
-      return serviceEnabled;
+      setLocationStatus(`Quyền hiện tại: ${existingStatus}`);
+      return true;
     } catch (error) {
-      console.error('Error checking location settings:', error);
+      console.error(error);
       setLocationStatus('Lỗi kiểm tra cài đặt vị trí');
       return false;
     }
   };
 
-  const requestLocationPermission = async () => {
+  const requestLocationPermission = async (): Promise<boolean> => {
+    setIsRequestingPermission(true);
+    setLocationStatus('Đang yêu cầu quyền...');
+    const settingsOk = await checkLocationSettings();
+    if (!settingsOk) {
+      Alert.alert(
+        'Dịch vụ vị trí',
+        'Vui lòng bật dịch vụ vị trí trong cài đặt.',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          {
+            text: 'Mở cài đặt',
+            onPress: () =>
+              Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+          },
+        ],
+      );
+      setIsRequestingPermission(false);
+      return false;
+    }
+
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    setLocationStatus(`Quyền mới: ${status}`);
+    if (status !== 'granted') {
+      Alert.alert(
+        'Cần quyền vị trí',
+        'Ứng dụng cần quyền vị trí để nhận đơn.',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          {
+            text: 'Cấp quyền',
+            onPress: () =>
+              Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+          },
+        ],
+      );
+      setIsRequestingPermission(false);
+      return false;
+    }
+
     try {
-      setIsRequestingPermission(true);
-      setLocationStatus('Đang yêu cầu quyền truy cập vị trí...');
-      
-      // Kiểm tra cài đặt vị trí
-      const settingsEnabled = await checkLocationSettings();
-      if (!settingsEnabled) {
-        Alert.alert(
-          'Dịch vụ vị trí bị tắt',
-          'Vui lòng bật dịch vụ vị trí trong cài đặt thiết bị để tiếp tục.',
-          [
-            { text: 'Đóng', style: 'cancel' },
-            {
-              text: 'Mở cài đặt',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              }
-            }
-          ]
-        );
-        return false;
-      }
-
-      // Yêu cầu quyền truy cập vị trí
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      console.log('New permission status:', status);
-      setLocationStatus(`Trạng thái quyền mới: ${status}`);
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          'Cần quyền truy cập vị trí',
-          'Ứng dụng cần quyền truy cập vị trí để có thể nhận đơn hàng gần bạn.',
-          [
-            { text: 'Đóng', style: 'cancel' },
-            {
-              text: 'Cấp quyền',
-              onPress: async () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              }
-            }
-          ]
-        );
-        return false;
-      }
-
-      // Lấy vị trí hiện tại
       setLocationStatus('Đang lấy vị trí...');
-      const location = await Location.getCurrentPositionAsync({
+      const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
       });
-      
-      console.log('Location obtained:', location);
-      setCurrentLocation(location);
+      setCurrentLocation(loc);
       setLocationError(null);
       setLocationStatus('Đã lấy được vị trí');
       return true;
-    } catch (error) {
-      console.error('Error requesting location permission:', error);
-      setLocationError('Không thể lấy vị trí hiện tại');
-      setLocationStatus('Lỗi: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } catch (err) {
+      console.error(err);
+      setLocationError('Không thể lấy vị trí');
+      setLocationStatus(`Lỗi: ${(err as Error).message}`);
       return false;
     } finally {
       setIsRequestingPermission(false);
     }
   };
 
+  // Khi mount: yêu cầu quyền
   useEffect(() => {
     requestLocationPermission();
   }, []);
 
-  const handleAcceptOrder = async (orderId: string, orderDetails: Order) => {
-    try {
-      // Gửi yêu cầu chấp nhận đơn hàng qua socket
-      socket.emit('accept_order', {
-        orderId,
-        shipperId: '65f7b1a4e01c6f2d542a6666' // Thay thế bằng ID shipper thực tế
-      });
-
-      // Lắng nghe phản hồi từ server
-      socket.once('order_response', (response) => {
-        if (response.success) {
-          // Lưu thông tin đơn hàng vào store
-          acceptOrder(orderId, response.orderDetails);
-          // Chuyển hướng đến trang chi tiết đơn hàng
-          router.push(`/order/${orderId}`);
-        } else {
-          Alert.alert(
-            'Lỗi',
-            response.message || 'Không thể chấp nhận đơn hàng. Vui lòng thử lại.'
-          );
-        }
-      });
-
-      // Đặt timeout cho việc chờ phản hồi
-      setTimeout(() => {
-        socket.off('order_response');
-        Alert.alert(
-          'Hết thời gian chờ',
-          'Không nhận được phản hồi từ server. Vui lòng thử lại.'
-        );
-      }, 100000); // 10 giây timeout
-
-    } catch (error) {
-      console.error('Error accepting order:', error);
-      Alert.alert(
-        'Lỗi',
-        'Đã xảy ra lỗi khi chấp nhận đơn hàng. Vui lòng thử lại.'
-      );
-    }
-  };
-
+  // Lắng nghe các đơn mới và gửi cập nhật vị trí định kỳ
   useEffect(() => {
     if (!currentLocation) return;
 
     const intervalId = setInterval(async () => {
       try {
-        const location = await Location.getCurrentPositionAsync({
+        const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
         });
-        console.log('Location update:', location);
-        setCurrentLocation(location);
-        
+        setCurrentLocation(loc);
         socket.emit('current_location', {
           shipperId: '65f7b1a4e01c6f2d542a6666',
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
         });
-      } catch (error) {
-        console.error('Error updating location:', error);
-        setLocationError('Không thể cập nhật vị trí');
-        setLocationStatus('Lỗi cập nhật: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } catch (err) {
+        console.error(err);
       }
-    }, 3000);
+    }, 5000);
 
-    socket.on('new_order_assigned', (data) => {
-      const { orderId, orderDetails } = data;
+    socket.on('new_order_assigned', (data: { orderId: string; orderDetails: Order }) => {
       Alert.alert(
-        'Đơn hàng mới!',
-        `Bạn có muốn nhận đơn hàng ${orderId} không?`,
+        'Đơn hàng mới',
+        `Bạn có muốn nhận đơn ${data.orderId} không?`,
         [
           { text: 'Từ chối', style: 'cancel' },
           {
             text: 'Chấp nhận',
-            onPress: () => handleAcceptOrder(orderId, orderDetails),
+            onPress: () => handleAcceptOrder(data.orderId, data.orderDetails),
           },
-        ]
+        ],
       );
     });
 
@@ -208,20 +151,35 @@ export default function OrdersScreen() {
     };
   }, [currentLocation]);
 
-  const sendLocation = async () => {
-    if (!currentLocation) {
-      const hasPermission = await requestLocationPermission();
-      if (!hasPermission) {
-        return;
-      }
-    }
-
-    socket.emit('assign_order', {
-      orderId: '681efd2e50ac2b9eea6f13de',
+  const handleAcceptOrder = (orderId: string, orderDetails: Order) => {
+    socket.emit('accept_order', {
+      orderId,
+      shipperId: '65f7b1a4e01c6f2d542a6666',
     });
+
+    socket.once('order_response', (response: any) => {
+      if (response.success) {
+        acceptOrder(orderId, response.orderDetails);
+        router.push(`/order/${orderId}`);
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể chấp nhận đơn.');
+      }
+    });
+
+    setTimeout(() => {
+      socket.off('order_response');
+      Alert.alert('Hết thời gian', 'Không nhận được phản hồi từ server.');
+    }, 10000);
   };
 
-  // Hiển thị trạng thái vị trí
+  const sendLocation = async () => {
+    if (!currentLocation) {
+      const ok = await requestLocationPermission();
+      if (!ok) return;
+    }
+    socket.emit('assign_order', { orderId: '681f06bf71a1380d27f81ecd' });
+  };
+
   const renderLocationStatus = () => {
     if (locationError) {
       return (
@@ -231,112 +189,110 @@ export default function OrdersScreen() {
         </View>
       );
     }
-
     if (isRequestingPermission) {
       return (
         <View style={styles.locationStatusContainer}>
-          <Text style={styles.locationStatus}>Đang yêu cầu quyền truy cập vị trí...</Text>
+          <Text style={styles.locationStatus}>Đang yêu cầu quyền...</Text>
         </View>
       );
     }
-
     if (!currentLocation) {
       return (
         <View style={styles.locationStatusContainer}>
-          <Text style={styles.locationStatus}>Chưa có thông tin vị trí</Text>
-          <Button title="Yêu cầu quyền truy cập" onPress={requestLocationPermission} />
+          <Text style={styles.locationStatus}>Chưa có vị trí</Text>
+          <Button title="Yêu cầu quyền" onPress={requestLocationPermission} />
         </View>
       );
     }
-
     return (
       <View style={styles.locationStatusContainer}>
         <Text style={styles.locationStatus}>
-          Vị trí hiện tại: {currentLocation.coords.latitude.toFixed(6)}, {currentLocation.coords.longitude.toFixed(6)}
+          Vị trí: {currentLocation.coords.latitude.toFixed(6)}, {currentLocation.coords.longitude.toFixed(6)}
         </Text>
       </View>
     );
   };
 
-  const renderOrderCard = ({ item }: { item: Order }) => (
-    <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => {
-        setSelectedOrder(selectedOrder?.id === item.id ? null : item);
-        router.push(`/order/${item.id}`);
-      }}
-    >
-      <Button title="Gửi vị trí hiện tại" onPress={sendLocation} />
+  const renderOrderCard = ({ item }: { item: Order }) => {
+    const expanded = selectedOrderId === item._id;
+    return (
+      <TouchableOpacity
+        style={styles.orderCard}
+        onPress={() => {
+          setSelectedOrderId(expanded ? null : item._id);
+          router.push(`/order/${item._id}`);
+        }}
+      >
+        <Button title="Gửi vị trí" onPress={sendLocation} />
 
-      <View style={styles.orderHeader}>
-        <View style={styles.statusIndicator}>
-          <Package size={20} color={colors.white} />
-        </View>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>{item.orderNumber}</Text>
-          <View style={styles.orderTime}>
-            <Clock size={14} color={colors.subtext} style={styles.icon} />
-            <Text>{formatDate(item.createdAt)}</Text>
+        <View style={styles.orderHeader}>
+          <View style={styles.statusIndicator}>
+            <Package size={20} color={colors.white} />
+          </View>
+          <View style={styles.orderInfo}>
+            <Text style={styles.orderId}>{item.orderNumber || `#${item._id.slice(-8)}`}</Text>
+            <View style={styles.orderTime}>
+              <Clock size={14} color={colors.subtext} style={styles.icon} />
+              <Text>{formatDate(item.createdAt)}</Text>
+            </View>
+          </View>
+          <View style={styles.orderAmount}>
+            <Text style={styles.amountText}>{formatCurrency(item.finalAmount)}</Text>
+            <Text style={styles.itemCount}>
+              {item.items.reduce((sum, i) => sum + i.quantity, 0)} món
+            </Text>
           </View>
         </View>
-        <View style={styles.orderAmount}>
-          <Text style={styles.amountText}>{formatCurrency(item.totalAmount)}</Text>
-          <Text style={styles.itemCount}>
-            {item.items.reduce((sum, item) => sum + item.quantity, 0)} items
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.customerRow}>
-        <Image source={{ uri: item.customer.photoUrl }} style={styles.customerImage} />
-        <Text style={styles.customerName}>{item.customer.name}</Text>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                item.status === 'delivering' ? colors.warning : colors.success,
-            },
-          ]}
-        >
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
-
-      {selectedOrder?.id === item.id && (
-        <View style={styles.orderDetails}>
-          <View style={styles.divider} />
-          <View style={styles.detailRow}>
-            <MapPin size={16} color={colors.primary} />
-            <Text style={styles.detailText}>{item.customerLocation.address}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Phone size={16} color={colors.primary} />
-            <Text style={styles.detailText}>{item.customer.phone}</Text>
-          </View>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={[styles.actionButton, styles.messageButton]}>
-              <Text style={styles.actionButtonText}>Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.navigateButton]}>
-              <Text style={styles.navigateButtonText}>Navigate</Text>
-            </TouchableOpacity>
+        <View style={styles.customerRow}>
+          <Image
+            source={{ uri: item.address?.photoUrl || 'https://via.placeholder.com/36' }}
+            style={styles.customerImage}
+          />
+          <Text style={styles.customerName}>{item.address?.name || 'Khách hàng'}</Text>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: item.orderStatus === 'delivering' ? colors.warning : colors.success },
+            ]}
+          >
+            <Text style={styles.statusText}>{item.orderStatus}</Text>
           </View>
         </View>
-      )}
 
-      <View style={styles.expandRow}>
-        <Text style={styles.expandText}>
-          {selectedOrder?.id === item.id ? 'Hide Details' : 'View Details'}
-        </Text>
-        <ChevronRight
-          size={16}
-          color={colors.subtext}
-          style={selectedOrder?.id === item.id ? styles.rotatedIcon : null}
-        />
-      </View>
-    </TouchableOpacity>
-  );
+        {expanded && (
+          <View style={styles.orderDetails}>
+            <View style={styles.divider} />
+            <View style={styles.detailRow}>
+              <MapPin size={16} color={colors.primary} />
+              <Text style={styles.detailText}>{item.address?.address || 'Chưa có địa chỉ'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Phone size={16} color={colors.primary} />
+              <Text style={styles.detailText}>{item.address?.phoneNumber}</Text>
+            </View>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity style={[styles.actionButton, styles.messageButton]}>
+                <Text style={styles.actionButtonText}>Nhắn tin</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, styles.navigateButton]}>
+                <Text style={styles.navigateButtonText}>Điều hướng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.expandRow}>
+          <Text style={styles.expandText}>{expanded ? 'Ẩn chi tiết' : 'Xem chi tiết'}</Text>
+          <ChevronRight
+            size={16}
+            color={colors.subtext}
+            style={expanded ? styles.rotatedIcon : undefined}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -346,7 +302,7 @@ export default function OrdersScreen() {
         <FlatList
           data={orders}
           renderItem={renderOrderCard}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContainer}
         />
       ) : (

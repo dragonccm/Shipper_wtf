@@ -26,6 +26,19 @@ export interface Restaurant {
   photoUrl: string;
 }
 
+export interface Address {
+  name: string;
+  phoneNumber: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface Discount {
+  voucherId?: string;
+  amount: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -52,4 +65,44 @@ export interface User {
   photoUrl: string;
   isOnline: boolean;
   currentLocation?: Location;
+}
+export interface Order {
+  _id: string;
+  orderNumber?: string;
+  restaurant?: any;
+  user: User;
+  address: Address;
+  items: OrderItem[];
+  discount?: Discount;
+  totalPrice: number;
+  shippingFee: number;
+  finalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  orderStatus: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+  isRated?: boolean;
+  shipper?: any;
+  __v?: number;
+  notes?: string;
+}
+export interface OrderItem {
+  food: string;
+  quantity: number;
+  price: number;
+  toppings: Topping[];
+  _id?: string;
+}
+
+export interface ToppingItem {
+  id: string;
+  price: number;
+  _id?: string;
+}
+
+export interface Topping {
+  topping: string;
+  item: ToppingItem[];
+  _id?: string;
 }

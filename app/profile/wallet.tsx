@@ -17,17 +17,17 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     logout();
-    router.replace('/');
+    router.replace("/");
   };
 
+  // Nếu chưa có user hoặc dữ liệu bị thiếu
   if (!user) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Trang cá nhân</Text>
         <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
-        
-        <Button 
-          title="Đăng nhập / Đăng ký" 
+        <Button
+          title="Đăng nhập / Đăng ký"
           onPress={handleLoginPress}
           style={styles.button}
         />
@@ -35,38 +35,42 @@ export default function ProfileScreen() {
     );
   }
 
+  // Lấy ký tự đầu làm avatar, nếu không có name thì dùng '?' 
+  const initial = user.name?.charAt(0).toUpperCase() || "?";
+  const displayName = user.name || "Khách";
+  const displayEmail = user.email || "Chưa có email";
+  const displayPhone = user.phone || "Chưa có số điện thoại";
+
   return (
     <View style={styles.container}>
       <View style={styles.profileHeader}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>
-            {user.name.charAt(0).toUpperCase()}
-          </Text>
+          <Text style={styles.avatarText}>{initial}</Text>
         </View>
-        <Text style={styles.userName}>{user.name}</Text>
-        <Text style={styles.userEmail}>{user.email}</Text>
+        <Text style={styles.userName}>{displayName}</Text>
+        <Text style={styles.userEmail}>{displayEmail}</Text>
       </View>
 
       <View style={styles.tabContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => router.push('/profile/edit-profile')}
+          onPress={() => router.push("/profile/edit-profile")}
         >
           <Feather name="edit" size={24} color={colors.text} />
           <Text style={styles.tabText}>Chỉnh sửa thông tin</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => router.push('/profile/earnings-history')}
+          onPress={() => router.push("/profile/earnings-history")}
         >
           <Feather name="shopping-bag" size={24} color={colors.text} />
           <Text style={styles.tabText}>Đơn hàng của tôi</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => router.push('/profile/settings')}
+          onPress={() => router.push("/profile/settings")}
         >
           <Feather name="settings" size={24} color={colors.text} />
           <Text style={styles.tabText}>Cài đặt</Text>
@@ -76,12 +80,12 @@ export default function ProfileScreen() {
       <View style={styles.profileInfo}>
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>Số điện thoại:</Text>
-          <Text style={styles.infoValue}>{user.phone}</Text>
+          <Text style={styles.infoValue}>{displayPhone}</Text>
         </View>
       </View>
 
-      <Button 
-        title="Đăng xuất" 
+      <Button
+        title="Đăng xuất"
         onPress={handleLogout}
         style={styles.button}
       />
