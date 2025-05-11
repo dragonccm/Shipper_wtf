@@ -3,7 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { Order, OrderStatus } from "@/types";
 import { orderAPI } from "@/services/api";
-
+import { socket } from "@/utils/socket";
+import { router } from "expo-router";
 // Không cần định nghĩa User ở đây vì chúng ta sẽ sử dụng token từ authAPI
 
 interface OrderState {
@@ -16,7 +17,7 @@ interface OrderState {
 
   // Actions
   fetchOrders: () => Promise<void>;
-  acceptOrder: (orderId: string) => Promise<void>;
+  acceptOrder: (orderId: string, orderData: Order) => Promise<void>;
   declineOrder: (orderId: string) => Promise<void>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   generateNewOrderRequest: () => void;
@@ -42,10 +43,43 @@ export const useOrderStore = create<OrderState>()(
           const result = await orderAPI.getOrders();
           
           if (result.success && result.orders) {
+            // Transform the orders to match our interface
+            const transformedOrders = result.orders.map((order: any) => ({
+              id: order.id || order._id,
+              orderNumber: order.orderNumber || `#${order.id}`,
+              restaurant: {
+                id: order.restaurant?.id || 'unknown',
+                name: order.restaurant?.name || 'Unknown Restaurant',
+                location: {
+                  latitude: order.restaurant?.location?.latitude || 0,
+                  longitude: order.restaurant?.location?.longitude || 0,
+                  address: order.restaurant?.location?.address || 'No address provided'
+                },
+                photoUrl: order.restaurant?.photoUrl || 'https://via.placeholder.com/60'
+              },
+              customer: {
+                id: order.customer?.id || 'unknown',
+                name: order.customer?.name || 'Unknown Customer',
+                phone: order.customer?.phone || 'No phone provided',
+                photoUrl: order.customer?.photoUrl || 'https://via.placeholder.com/60'
+              },
+              items: order.items || [],
+              totalAmount: order.totalAmount || 0,
+              status: order.status || 'pending',
+              createdAt: order.createdAt || new Date().toISOString(),
+              estimatedDeliveryTime: order.estimatedDeliveryTime || new Date(Date.now() + 30 * 60000).toISOString(),
+              customerLocation: {
+                latitude: order.customerLocation?.latitude || 0,
+                longitude: order.customerLocation?.longitude || 0,
+                address: order.customerLocation?.address || 'No address provided'
+              },
+              notes: order.notes || ''
+            }));
+
             set({
-              orders: result.orders,
-              activeOrders: result.orders.filter(order => order.status !== "delivered"),
-              completedOrders: result.orders.filter(order => order.status === "delivered"),
+              orders: transformedOrders,
+              activeOrders: transformedOrders.filter(order => order.status !== "delivered"),
+              completedOrders: transformedOrders.filter(order => order.status === "delivered"),
               isLoading: false
             });
           } else {
@@ -63,8 +97,9 @@ export const useOrderStore = create<OrderState>()(
         }
       },
 
-      acceptOrder: async (orderId: string) => {
+      acceptOrder: async (orderId: string, orderData: Order) => {
         const { pendingOrder, isLoading } = get();
+        socket.emit("accept_order",{orderId,shipperId:"65f7b1a4e01c6f2d542a7777"})
         if (isLoading || !pendingOrder || pendingOrder.id !== orderId) return;
 
         set({ isLoading: true, error: null });
@@ -75,10 +110,9 @@ export const useOrderStore = create<OrderState>()(
           if (result.success && result.order) {
             // Cập nhật danh sách đơn hàng với đơn hàng đã chấp nhận
             const { orders, activeOrders } = get();
-            
             set({
-              orders: [...orders, result.order],
-              activeOrders: [...activeOrders, result.order],
+              orders: [...orders, orderData],
+              activeOrders: [...activeOrders, orderData],
               pendingOrder: null,
               isLoading: false
             });
@@ -156,6 +190,7 @@ export const useOrderStore = create<OrderState>()(
               completedOrders: updatedCompletedOrders,
               isLoading: false
             });
+
           } else {
             set({ 
               isLoading: false, 

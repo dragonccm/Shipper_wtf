@@ -4,16 +4,10 @@ import * as ExpoLocation from 'expo-location';
 import { useRouter } from "expo-router";
 import { colors } from "@/constants/colors";
 import { Button } from "@/components/Button";
-import { socket } from "@/utils/socket";
 const HomeScreen = () => {
   const [currentLocation, setCurrentLocation] = useState<ExpoLocation.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const router = useRouter();
-  socket.emit('send_mess', {
-    shipperId:"65f7b1a4e01c6f2d542a6666",
-    latitude: 10.038473758175414,
-    longitude: 105.78686334192753
-  });
   useEffect(() => {
     (async () => {
       let { status } = await ExpoLocation.requestForegroundPermissionsAsync();

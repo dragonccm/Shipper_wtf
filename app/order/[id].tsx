@@ -1,24 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  Image, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
   TouchableOpacity,
   Alert,
   Platform,
   Linking
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { 
-  Phone, 
-  MapPin, 
-  Clock, 
-  ChevronRight, 
-  MessageCircle,
-  Navigation
-} from "lucide-react-native";
+import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { colors } from "@/constants/colors";
 // Đã loại bỏ: import { useOrderStore } from "@/store/orderStore";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
@@ -27,64 +21,161 @@ import { CustomMapView } from "@/components/MapView";
 import { Button } from "@/components/Button";
 import { NavigationBar } from "@/components/NavigationBar";
 import { formatCurrency, formatDate, formatPhoneNumber } from "@/utils/formatters";
-import { OrderStatus } from "@/types";
+import { OrderStatus, Location } from "@/types";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
+
+interface Order {
+  _id: string;
+  status: OrderStatus;
+  createdAt: string;
+  restaurant?: {
+    name?: string;
+    photoUrl?: string;
+    location?: Location;
+  };
+  customer?: {
+    name?: string;
+    phone?: string;
+    photoUrl?: string;
+    location?: Location;
+  };
+  items?: Array<{
+    _id?: string;
+    name?: string;
+    quantity: number;
+    price: number;
+  }>;
+  totalPrice: number;
+  shippingFee: number;
+  finalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  note?: string;
+  discount?: {
+    amount: number;
+  };
+}
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  // Đã loại bỏ: const { orders, updateOrderStatus } = useOrderStore();
-  // Dữ liệu mẫu thay thế cho orders
-  const sampleOrders = [
-    {
-      id: "1001",
-      orderNumber: "#1001",
-      createdAt: new Date(),
-      status: "goingToRestaurant",
-      restaurant: {
-        name: "Pizza Hut",
-        photoUrl: "https://via.placeholder.com/60",
-        location: { address: "123 Delivery St, District 1" }
-      },
-      customer: {
-        name: "John Smith",
-        phone: "+84 123 456 789",
-        photoUrl: "https://via.placeholder.com/60"
-      },
-      customerLocation: { address: "123 Delivery St, District 1" },
-      items: [{ quantity: 2 }, { quantity: 1 }],
-      totalAmount: 245000
-    }
-  ];
-  const [order, setOrder] = useState(sampleOrders.find(o => o.id === id));
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  
+  // Lấy vị trí hiện tại của shipper
   useEffect(() => {
-    setOrder(sampleOrders.find(o => o.id === id));
-  }, [id]);
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Quyền truy cập", "Không thể truy cập vị trí của bạn");
+        return;
+      }
 
-  // Đã loại bỏ updateOrderStatus, thay thế bằng hàm giả lập
-  const updateOrderStatus = (orderId: string, nextStatus: OrderStatus) => {
-    setOrder((prev) => prev ? { ...prev, status: nextStatus } : prev);
-  };
+      const location = await Location.getCurrentPositionAsync({});
+      setCurrentLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      });
+    })();
+  }, []);
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/getorder/${id}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
 
-  const handleCall = () => {
-    if (!order) return;
+        if (!response.ok) {
+          throw new Error('Failed to fetch order');
+        }
+
+        const data = await response.json();
+        console.log('Order data received:', data);
+
+        if (data.EC === "0" && data.DT) {
+          setOrder(data.DT);
+        } else {
+          throw new Error(data.EM || 'Failed to fetch order');
+        }
+      } catch (error) {
+        console.error("Error fetching order:", error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch order');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrder();
+  }, []);
+
+  const handleCall = (phoneNumber: string) => {
+    if (!phoneNumber || !order) return;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    const phoneNumber = order.customer.phone;
-    if (Platform.OS === "android") {
-      Linking.openURL(`tel:${phoneNumber}`);
-    } else if (Platform.OS === "ios") {
-      Linking.openURL(`telprompt:${phoneNumber}`);
+    const url = Platform.OS === "android" ? `tel:${phoneNumber}` : Platform.OS === "ios" ? `telprompt:${phoneNumber}` : '';
+    
+    if (url) {
+      Linking.canOpenURL(url)
+        .then((supported) => {
+          if (!supported) {
+            Alert.alert("Thông báo", "Không thể thực hiện cuộc gọi trên thiết bị này");
+          } else {
+            return Linking.openURL(url);
+          }
+        })
+        .catch((err) => Alert.alert("Lỗi", "Không thể thực hiện cuộc gọi: " + err));
     } else {
-      alert(`Call customer at: ${phoneNumber}`);
+      alert(`Gọi số: ${phoneNumber}`);
     }
   };
 
-  const handleUpdateStatus = () => {
+  const handleOpenDirections = () => {
+    if (!order) return;
+    
+    // Xác định điểm đến dựa trên trạng thái đơn hàng
+    const destination = order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant" 
+      ? order.restaurant?.location 
+      : order.customer?.location;
+    
+    if (!destination?.latitude || !destination?.longitude) {
+      Alert.alert("Thông báo", "Không có thông tin vị trí để chỉ đường");
+      return;
+    }
+    
+    if (!currentLocation) {
+      Alert.alert("Thông báo", "Đang lấy vị trí hiện tại của bạn. Vui lòng thử lại sau.");
+      return;
+    }
+    
+    const label = order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant"
+      ? order.restaurant?.name || "Nhà hàng"
+      : order.customer?.name || "Khách hàng";
+    
+    const scheme = Platform.select({ ios: "maps:0,0?q=", android: "geo:0,0?q=" });
+    const latLng = `${destination.latitude},${destination.longitude}`;
+    const url = Platform.select({
+      ios: `maps://app?saddr=${currentLocation.latitude},${currentLocation.longitude}&daddr=${latLng}`,
+      android: `google.navigation:q=${latLng}&mode=d`,
+      default: `https://www.google.com/maps/dir/?api=1&origin=${currentLocation.latitude},${currentLocation.longitude}&destination=${latLng}`
+    });
+    
+    Linking.openURL(url).catch(err => {
+      console.error('Error opening maps:', err);
+      Alert.alert("Lỗi", "Không thể mở ứng dụng bản đồ");
+    });
+  };
+
+  const handleUpdateStatus = async () => {
     if (!order) return;
     if (Platform.OS !== "web") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+
     const statusMap: Record<OrderStatus, OrderStatus> = {
       goingToRestaurant: "arrivedAtRestaurant",
       arrivedAtRestaurant: "pickedUp",
@@ -93,18 +184,74 @@ export default function OrderDetailScreen() {
       arrivedAtCustomer: "delivered",
       delivered: "delivered"
     };
-    const nextStatus = statusMap[order.status];
+
+    const nextStatus = statusMap[order.status as OrderStatus];
     if (nextStatus === "delivered") {
       Alert.alert(
         "Complete Delivery",
         "Are you sure you want to mark this order as delivered?",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: () => updateOrderStatus(order.id, nextStatus) }
+          {
+            text: "Confirm",
+            onPress: async () => {
+              try {
+                const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/shipper/order/${order._id}/status`, {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ status: nextStatus })
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to update order status');
+                }
+
+                const data = await response.json();
+                if (data.EC === "0") {
+                  setOrder((prev: Order | null) => prev ? { ...prev, status: nextStatus } : null);
+                } else {
+                  throw new Error(data.EM || 'Failed to update order status');
+                }
+              } catch (error) {
+                console.error("Error updating order status:", error);
+                Alert.alert(
+                  "Error",
+                  "Failed to update order status. Please try again."
+                );
+              }
+            }
+          }
         ]
       );
     } else {
-      updateOrderStatus(order.id, nextStatus);
+      try {
+        const response = await fetch(`https://665c-14-240-55-19.ngrok-free.app/api/shipper/order/${order._id}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ status: nextStatus })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update order status');
+        }
+
+        const data = await response.json();
+        if (data.EC === "0") {
+          setOrder((prev: Order | null) => prev ? { ...prev, status: nextStatus } : null);
+        } else {
+          throw new Error(data.EM || 'Failed to update order status');
+        }
+      } catch (error) {
+        console.error("Error updating order status:", error);
+        Alert.alert(
+          "Error",
+          "Failed to update order status. Please try again."
+        );
+      }
     }
   };
 
@@ -118,97 +265,293 @@ export default function OrderDetailScreen() {
       arrivedAtCustomer: "Complete Delivery",
       delivered: "Completed"
     };
-    return statusTextMap[order.status];
+    return statusTextMap[order.status as OrderStatus];
   };
 
-  if (!order) {
+  if (loading) {
     return (
-      <View style={styles.notFoundContainer}>
-        <NavigationBar title="Order Details" showBackButton />
-        <Text style={styles.notFoundText}>Order not found</Text>
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Chi tiết đơn hàng</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text>Đang tải thông tin đơn hàng...</Text>
+        </View>
       </View>
     );
   }
-  const isDelivered = order.status === "delivered";
-  return (
-    <View style={styles.mainContainer}>
-      <NavigationBar 
-        title={`Order ${order.orderNumber}`} 
-        showBackButton 
-        rightComponent={<OrderStatusBadge status={order.status} size="small" />}
-      />
-      <ScrollView 
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
+
+  if (error || !order) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
         <View style={styles.header}>
-          <View>
-            <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-            <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
-          </View>
-          <OrderStatusBadge status={order.status} size="large" />
+          <Text style={styles.headerTitle}>Chi tiết đơn hàng</Text>
         </View>
-        <CustomMapView 
-          currentLocation={order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant" 
-            ? undefined 
-            : order.restaurant.location}
-          destinationLocation={order.status === "goingToRestaurant" || order.status === "arrivedAtRestaurant" 
-            ? order.restaurant.location 
-            : order.customerLocation}
-          showNavigationButton={!isDelivered}
-          height={200}
-        />
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Status</Text>
-          <OrderStatusStepper currentStatus={order.status} />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error || "Không tìm thấy đơn hàng"}</Text>
         </View>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Restaurant</Text>
-          <View style={styles.locationCard}>
-            <Image 
-              source={{ uri: order.restaurant.photoUrl }} 
-              style={styles.locationImage} 
-            />
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationName}>{order.restaurant.name}</Text>
-              <View style={styles.locationAddressRow}>
-                <MapPin size={16} color={colors.subtext} />
-                <Text style={styles.locationAddress} numberOfLines={2}>
-                  {order.restaurant.location.address}
-                </Text>
-              </View>
+      </View>
+    );
+  }
+
+  const isDelivered = order.status === "delivered";
+  
+  // Xác định hiển thị vị trí nào dựa trên trạng thái đơn hàng
+  const showRestaurantLocation = ["goingToRestaurant", "arrivedAtRestaurant"].includes(order.status);
+  const showCustomerLocation = ["pickedUp", "delivering", "arrivedAtCustomer"].includes(order.status);
+
+  // Ánh xạ trạng thái đơn hàng sang các bước trong timeline
+  const ORDER_STATUSES = {
+    goingToRestaurant: 0,
+    arrivedAtRestaurant: 1,
+    pickedUp: 2,
+    delivering: 3,
+    arrivedAtCustomer: 4,
+    delivered: 5
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Chi tiết đơn hàng</Text>
+        <Text style={styles.orderId}>#{order._id.slice(-8)}</Text>
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        {/* Status */}
+        <View style={styles.statusContainer}>
+          <View style={styles.statusHeader}>
+            <Text style={styles.statusTitle}>Trạng thái đơn hàng</Text>
+            <View
+              style={[
+                styles.statusBadge,
+                order.status === "delivered"
+                  ? styles.statusDelivered
+                  : styles.statusActive,
+              ]}
+            >
+              <Text style={styles.statusText}>
+                {order.status === "goingToRestaurant"
+                  ? "Đang đến nhà hàng"
+                  : order.status === "arrivedAtRestaurant"
+                    ? "Đã đến nhà hàng"
+                    : order.status === "pickedUp"
+                      ? "Đã lấy hàng"
+                      : order.status === "delivering"
+                        ? "Đang giao hàng"
+                        : order.status === "arrivedAtCustomer"
+                          ? "Đã đến nơi giao"
+                          : "Đã giao hàng"}
+              </Text>
             </View>
           </View>
+
+          {/* Status Timeline */}
+          <View style={styles.timeline}>
+            {["goingToRestaurant", "arrivedAtRestaurant", "pickedUp", "delivering", "delivered"].map((status, index) => {
+              const isActive = ORDER_STATUSES[order.status] >= ORDER_STATUSES[status];
+              const isLast = index === 4;
+
+              return (
+                <View key={status} style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, isActive ? styles.activeDot : {}]} />
+                  {!isLast && <View style={[styles.timelineLine, isActive ? styles.activeLine : {}]} />}
+                  <Text style={[styles.timelineText, isActive ? styles.activeTimelineText : {}]}>
+                    {status === "goingToRestaurant"
+                      ? "Đến nhà hàng"
+                      : status === "arrivedAtRestaurant"
+                        ? "Tại nhà hàng"
+                        : status === "pickedUp"
+                          ? "Lấy hàng"
+                          : status === "delivering"
+                            ? "Giao hàng"
+                            : "Hoàn thành"}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
+
+        {/* Restaurant Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer</Text>
-          <View style={styles.customerCard}>
-            <Image 
-              source={{ uri: order.customer.photoUrl }} 
-              style={styles.customerImage} 
-            />
-            <View style={styles.customerInfo}>
-              <Text style={styles.customerName}>{order.customer.name}</Text>
-              <TouchableOpacity 
-                style={styles.customerPhoneRow}
-                onPress={handleCall}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Thông tin nhà hàng</Text>
+            {showRestaurantLocation && (
+              <TouchableOpacity
+                style={styles.locationButton}
+                onPress={handleOpenDirections}
               >
-                <Phone size={16} color={colors.primary} />
-                <Text style={styles.customerPhone}>
-                  {formatPhoneNumber(order.customer.phone)}
+                <MaterialIcons name="directions" size={16} color="#fff" />
+                <Text style={styles.locationButtonText}>Chỉ đường</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.restaurantInfo}>
+            <View style={styles.restaurantImageContainer}>
+              <Image 
+                source={{ uri: order.restaurant?.photoUrl || 'https://via.placeholder.com/60' }} 
+                style={styles.restaurantImage} 
+              />
+            </View>
+            <View style={styles.restaurantDetails}>
+              <Text style={styles.restaurantName}>{order.restaurant?.name || 'Nhà hàng không xác định'}</Text>
+              <Text style={styles.restaurantAddress}>{order.restaurant?.location?.address || 'Không có địa chỉ'}</Text>
+              <TouchableOpacity 
+                style={styles.phoneButton} 
+                onPress={() => handleCall(order.restaurant?.phone || '')}
+              >
+                <Ionicons name="call" size={14} color={colors.primary} />
+                <Text style={styles.phoneButtonText}>
+                  {formatPhoneNumber(order.restaurant?.phone || '')}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
-        {/* ... giữ nguyên các phần còn lại ... */}
+
+        {/* Customer Info */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
+            {showCustomerLocation && (
+              <TouchableOpacity
+                style={styles.locationButton}
+                onPress={handleOpenDirections}
+              >
+                <MaterialIcons name="directions" size={16} color="#fff" />
+                <Text style={styles.locationButtonText}>Chỉ đường</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.customerInfo}>
+            <View style={styles.customerDetails}>
+              <Text style={styles.customerName}>{order.customer?.name || 'Khách hàng không xác định'}</Text>
+              <TouchableOpacity 
+                style={styles.phoneButton} 
+                onPress={() => handleCall(order.customer?.phone || '')}
+              >
+                <Ionicons name="call" size={14} color={colors.primary} />
+                <Text style={styles.phoneButtonText}>
+                  {formatPhoneNumber(order.customer?.phone || '')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {order.note && (
+            <View style={styles.noteContainer}>
+              <Text style={styles.noteLabel}>Ghi chú:</Text>
+              <Text style={styles.noteText}>{order.note}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Order Items */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Món ăn đã đặt</Text>
+
+          {order.items?.map((item: any, index: number) => (
+            <View key={item._id || index} style={styles.orderItem}>
+              <View style={styles.orderItemHeader}>
+                <View style={styles.orderItemQuantity}>
+                  <Text style={styles.quantityText}>{item.quantity}x</Text>
+                </View>
+                <View style={styles.orderItemDetails}>
+                  <Text style={styles.orderItemName}>{item.name || `Món ${index + 1}`}</Text>
+                  <Text style={styles.orderItemPrice}>{formatCurrency(item.price)}</Text>
+                </View>
+              </View>
+              {index < (order.items?.length || 0) - 1 && <View style={styles.itemDivider} />}
+            </View>
+          ))}
+        </View>
+
+        {/* Payment Info */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Thông tin thanh toán</Text>
+
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Tổng tiền hàng</Text>
+            <Text style={styles.paymentValue}>{formatCurrency(order.totalPrice)}</Text>
+          </View>
+
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Phí vận chuyển</Text>
+            <Text style={styles.paymentValue}>{formatCurrency(order.shippingFee)}</Text>
+          </View>
+
+          {order.discount && (
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Giảm giá</Text>
+              <Text style={styles.discountValue}>-{formatCurrency(order.discount.amount)}</Text>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          <View style={styles.paymentRow}>
+            <Text style={styles.totalLabel}>Tổng thanh toán</Text>
+            <Text style={styles.totalValue}>{formatCurrency(order.finalAmount)}</Text>
+          </View>
+
+          <View style={styles.paymentMethodContainer}>
+            <Text style={styles.paymentMethodLabel}>Phương thức thanh toán:</Text>
+            <View style={styles.paymentMethod}>
+              <FontAwesome5
+                name={order.paymentMethod === "cash" ? "money-bill-wave" : "credit-card"}
+                size={16}
+                color="#4CAF50"
+              />
+              <Text style={styles.paymentMethodText}>
+                {order.paymentMethod === "cash" ? "Tiền mặt" : "Thẻ tín dụng"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.paymentStatusContainer}>
+            <Text style={styles.paymentStatusLabel}>Trạng thái thanh toán:</Text>
+            <View
+              style={[
+                styles.paymentStatusBadge,
+                order.paymentStatus === "completed" ? styles.paymentCompleted : styles.paymentPending,
+              ]}
+            >
+              <Text style={styles.paymentStatusText}>
+                {order.paymentStatus === "completed" ? "Đã thanh toán" : "Chưa thanh toán"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Order Info */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Thông tin đơn hàng</Text>
+
+          <View style={styles.orderInfoRow}>
+            <Text style={styles.orderInfoLabel}>Mã đơn hàng:</Text>
+            <Text style={styles.orderInfoValue}>#{order._id.slice(-8)}</Text>
+          </View>
+
+          <View style={styles.orderInfoRow}>
+            <Text style={styles.orderInfoLabel}>Thời gian đặt:</Text>
+            <Text style={styles.orderInfoValue}>{formatDate(order.createdAt)}</Text>
+          </View>
+        </View>
       </ScrollView>
+
       {!isDelivered && (
-        <Button 
-          title={getNextStatusButtonText()} 
+        <Button
+          title={getNextStatusButtonText()}
           onPress={handleUpdateStatus}
-          style={styles.updateStatusButton}
+          style={styles.updateButton}
         />
       )}
     </View>
@@ -216,238 +559,370 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#f8f9fa",
   },
-  contentContainer: {
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  orderId: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    marginTop: 4,
+  },
+  scrollView: {
+    flex: 1,
     padding: 16,
-    paddingBottom: 40,
   },
-  notFoundContainer: {
+  loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
   },
-  notFoundText: {
-    fontSize: 18,
-    color: colors.text,
-    marginTop: 20,
+  errorContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
   },
-  header: {
+  errorText: {
+    color: "red",
+    textAlign: "center",
+  },
+  statusContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statusHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  orderNumber: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.text,
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212529",
   },
-  orderDate: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginTop: 4,
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  statusActive: {
+    backgroundColor: "#FFF3E0",
+  },
+  statusDelivered: {
+    backgroundColor: "#E8F5E9",
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  timeline: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  timelineItem: {
+    alignItems: "center",
+    position: "relative",
+    flex: 1,
+  },
+  timelineDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#E0E0E0",
+    marginBottom: 8,
+    zIndex: 1,
+  },
+  activeDot: {
+    backgroundColor: colors.primary,
+  },
+  timelineLine: {
+    position: "absolute",
+    top: 8,
+    right: "50%",
+    left: "50%",
+    height: 2,
+    backgroundColor: "#E0E0E0",
+    zIndex: 0,
+  },
+  activeLine: {
+    backgroundColor: colors.primary,
+  },
+  timelineText: {
+    fontSize: 10,
+    color: "#757575",
+    textAlign: "center",
+  },
+  activeTimelineText: {
+    color: "#212529",
+    fontWeight: "600",
   },
   section: {
-    marginBottom: 24,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 16,
-  },
-  locationCard: {
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  locationImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-  },
-  addressIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: colors.primary + "10",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locationInfo: {
-    marginLeft: 12,
-    flex: 1,
-    justifyContent: "center",
-  },
-  locationLabel: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginBottom: 4,
-  },
-  locationName: {
     fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  locationAddressRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  locationAddress: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginLeft: 4,
-    flex: 1,
-  },
-  customerCard: {
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
+    fontWeight: "bold",
+    color: "#212529",
     marginBottom: 12,
   },
-  customerImage: {
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  locationButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  restaurantInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  restaurantImageContainer: {
+    marginRight: 12,
+  },
+  restaurantImage: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 8,
+  },
+  restaurantDetails: {
+    flex: 1,
+  },
+  restaurantName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212529",
+    marginBottom: 4,
+  },
+  restaurantAddress: {
+    fontSize: 14,
+    color: "#6c757d",
+    marginBottom: 8,
+  },
+  phoneButton: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  phoneButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
   },
   customerInfo: {
-    marginLeft: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  customerDetails: {
     flex: 1,
-    justifyContent: "center",
   },
   customerName: {
     fontSize: 16,
+    fontWeight: "bold",
+    color: "#212529",
+    marginBottom: 8,
+  },
+  noteContainer: {
+    backgroundColor: "#FFF3E0",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  noteLabel: {
+    fontSize: 14,
     fontWeight: "600",
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 4,
   },
-  customerPhoneRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  customerPhone: {
+  noteText: {
     fontSize: 14,
-    color: colors.primary,
-    marginLeft: 4,
-  },
-  customerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary + "10",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  itemCountBadge: {
-    backgroundColor: colors.primary + "20",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  itemCountText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.primary,
+    color: "#212529",
   },
   orderItem: {
+    marginBottom: 12,
+  },
+  orderItemHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    alignItems: "flex-start",
   },
-  lastOrderItem: {
-    borderBottomWidth: 0,
-  },
-  itemName: {
-    fontSize: 16,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  itemQuantity: {
-    fontSize: 14,
-    color: colors.subtext,
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  totalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  orderItemQuantity: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 4,
+    width: 30,
+    height: 30,
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginRight: 12,
+  },
+  quantityText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#212529",
+  },
+  orderItemDetails: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  orderItemName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#212529",
+    flex: 1,
+  },
+  orderItemPrice: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#212529",
+  },
+  itemDivider: {
+    height: 1,
+    backgroundColor: "#E0E0E0",
+    marginVertical: 12,
+  },
+  paymentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  paymentLabel: {
+    fontSize: 14,
+    color: "#6c757d",
+  },
+  paymentValue: {
+    fontSize: 14,
+    color: "#212529",
+  },
+  discountValue: {
+    fontSize: 14,
+    color: "#4CAF50",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E0E0E0",
+    marginVertical: 12,
   },
   totalLabel: {
     fontSize: 16,
-    color: colors.text,
+    fontWeight: "bold",
+    color: "#212529",
   },
-  totalAmount: {
+  totalValue: {
     fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
+    fontWeight: "bold",
+    color: colors.primary,
   },
-  notesContainer: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+  paymentMethodContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
   },
-  notesText: {
+  paymentMethodLabel: {
     fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
+    color: "#6c757d",
+    marginRight: 8,
   },
-  deliveryInfoSection: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  deliveryInfoItem: {
+  paymentMethod: {
     flexDirection: "row",
     alignItems: "center",
   },
-  deliveryInfoContent: {
-    marginLeft: 12,
-  },
-  deliveryInfoLabel: {
+  paymentMethodText: {
     fontSize: 14,
-    color: colors.subtext,
-  },
-  deliveryInfoValue: {
-    fontSize: 16,
     fontWeight: "600",
-    color: colors.text,
-    marginTop: 2,
+    color: "#212529",
+    marginLeft: 6,
+  },
+  paymentStatusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  paymentStatusLabel: {
+    fontSize: 14,
+    color: "#6c757d",
+    marginRight: 8,
+  },
+  paymentStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  paymentCompleted: {
+    backgroundColor: "#E8F5E9",
+  },
+  paymentPending: {
+    backgroundColor: "#FFF3E0",
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4CAF50",
+  },
+  orderInfoRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  orderInfoLabel: {
+    fontSize: 14,
+    color: "#6c757d",
+    width: 120,
+  },
+  orderInfoValue: {
+    fontSize: 14,
+    color: "#212529",
+    fontWeight: "500",
   },
   updateButton: {
-    marginBottom: 16,
+    margin: 16,
   },
 });
