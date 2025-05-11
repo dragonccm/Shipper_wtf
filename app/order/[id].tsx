@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+sau đây hãy tạo và sử dụng các socket để thực hiện các chức năng để tronng trang vận đơn nút xác nhận của nó sẽ cập nhật các trạng thái đơn hàng khới đầu là pending là shipper chỉ nhận được thông báo và sau khi nhấn xác nhận đơn hàng thì cập nhật trạng thái của đơn tương ứng và cập nhật id của shipper trong đơn hàng tuỳ theo shipper đang ở bước nào thì cập nhật trạng thái đơn hàng tương ứng [id].tsx orderStore.ts authStore.ts socketConfig.js models hãy luôn chú ý luồn sự kiên để đảm bảo hoạt động đúng tại một vài chỗ tôi gắn id cứng là vì bên app  đặt hàng chưa hoạt động nên tôi không thể nhận các sự kiên từ bên đó như sự kiện có đơn hang mới và shipper tôi có vấn đề là hiện tại chỉ có tôi để test nên tài khoản của tôi là cái duy nhất hoạt động đúng ra nó nên là lấy shipper gần với nhà hàng của đơn hàng nhất bây giờ hãy tạm thời dùng shipper tôi đặt mặc định trong code để test trước
 import {
   View,
   Text,
