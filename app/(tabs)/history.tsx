@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { colors } from '@/constants/colors';
-import { CheckCircle, Clock, Calendar, ChevronDown, Filter, Search, XCircle } from 'lucide-react-native';
-import { TextInput } from 'react-native-gesture-handler';
+import { CheckCircle, Clock, Calendar, XCircle, RefreshCw } from 'lucide-react-native';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency } from '@/utils/formatters';
 import { API_URL } from '@/constants/config';
 
 interface Order {
   _id: string;
+  orderStatus: string;
   restaurant: {
     name: string;
     address: string;
@@ -23,53 +23,97 @@ interface Order {
     price: number;
   }>;
   total: number;
-  status: string;
   createdAt: string;
-  completedAt: string;
+  updatedAt: string;
 }
 
 export default function HistoryScreen() {
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const user = useAuthStore((state) => state.user);
+  const { user } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchOrders();
-  }, []);
-
+  }, [user?.shipperId]);
+console.log('User ID:', user?.shipperId); // Log ID người dùng để debug
   const fetchOrders = async () => {
     try {
-      if (user?.id) {
-        const response = await fetch(`${API_URL}/api/shipper/orders/${user.id}`);
-        const data = await response.json();
-        
-        if (data.EC === "0" && data.DT) {
-          setOrders(data.DT.completedOrders);
-        } else {
-          console.error('Error fetching orders:', data.EM);
+      if (!user?.shipperId) {
+        setOrders([]);
+        return;
+      }
+      
+      const response = await fetch(`${API_URL}/api/shipper/orders/${user.shipperId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': '1'
         }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.EC === "0" && data.DT) {
+        // Lấy danh sách đơn hàng đã hoàn thành từ cả activeOrders và completedOrders
+        let completedOrders = [];
+        if (data.DT.activeOrders && Array.isArray(data.DT.activeOrders)) {
+          const deliveredFromActive = data.DT.activeOrders.filter(order => order.orderStatus === 'delivered');
+          completedOrders = completedOrders.concat(deliveredFromActive);
+        }
+        if (data.DT.completedOrders && Array.isArray(data.DT.completedOrders)) {
+          completedOrders = completedOrders.concat(data.DT.completedOrders);
+        }
+
+        // Nới lỏng điều kiện filter, lấy các trường có thể có
+        const validOrders = completedOrders
+          .filter(order => order && order._id)
+          .map(order => ({
+            _id: order._id,
+            restaurant: {
+              name: (order.restaurant && order.restaurant.name) || order.restaurantName || '',
+              address: (order.address && order.address.address) || (order.restaurant && order.restaurant.address) || ''
+            },
+            customer: {
+              name:
+                (order.user && order.user.username) ||
+                (order.customer && order.customer.name) ||
+                '',
+              phone:
+                (order.user && order.user.phone) ||
+                (order.customer && order.customer.phone) ||
+                (order.address && order.address.phoneNumber) ||
+                ''
+            },
+            items: Array.isArray(order.items) ? order.items.map(item => ({
+              name: (item.food && item.food.name) || item.name || '',
+              quantity: Number(item.quantity) || 0,
+              price: Number(item.price) || 0
+            })) : [],
+            total: Number(order.finalAmount || order.total) || 0,
+            status: order.orderStatus === 'delivered' ? 'completed' : order.orderStatus,
+            createdAt: order.createdAt || new Date().toISOString(),
+            completedAt: order.updatedAt || new Date().toISOString()
+          }));
+
+        setOrders(validOrders);
+      } else {
+        setOrders([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      setOrders([]);
     } finally {
       setIsLoading(false);
     }
   };
   
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = searchQuery === '' || 
-      order.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order._id.includes(searchQuery);
-    
-    const matchesFilter = 
-      activeFilter === 'all' || 
-      order.status === activeFilter;
-      
-    return matchesSearch && matchesFilter;
-  });
+
   
   const renderOrderItem = ({ item }: { item: Order }) => (
     <TouchableOpacity style={styles.orderCard}>
@@ -83,10 +127,7 @@ export default function HistoryScreen() {
             <XCircle size={16} color={colors.white} />
           }
         </View>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item._id.slice(-4)}</Text>
-          <Text style={styles.customerName}>{item.customer.name}</Text>
-        </View>
+        <Text style={styles.orderId}>Đơn #{item._id.slice(-4)}</Text>
         <Text style={styles.orderAmount}>{formatCurrency(item.total)}</Text>
       </View>
       
@@ -105,19 +146,19 @@ export default function HistoryScreen() {
         </View>
       </View>
       
-      <View style={styles.addressContainer}>
-        <Text style={styles.addressText}>{item.restaurant.address}</Text>
-      </View>
-      
-      <View style={styles.divider} />
-      
       <View style={styles.restaurantInfo}>
         <Text style={styles.restaurantName}>{item.restaurant.name}</Text>
-        <Text style={styles.phoneNumber}>{item.customer.phone}</Text>
+        <Text style={styles.addressText}>{item.restaurant.address}</Text>
       </View>
     </TouchableOpacity>
   );
   
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrders();
+    setRefreshing(false);
+  }, []);
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -129,69 +170,38 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={18} color={colors.subtext} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm đơn hàng..."
-            placeholderTextColor={colors.subtext}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <XCircle size={18} color={colors.subtext} />
-            </TouchableOpacity>
-          )}
-        </View>
-        
+      <View style={styles.header}>
         <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+          style={styles.reloadButton}
+          onPress={onRefresh}
         >
-          <Filter size={18} color={colors.primary} />
-          <ChevronDown size={18} color={colors.primary} />
+          <RefreshCw size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
       
-      {isFilterMenuOpen && (
-        <View style={styles.filterMenu}>
-          <TouchableOpacity 
-            style={[styles.filterOption, activeFilter === 'all' && styles.activeFilter]}
-            onPress={() => setActiveFilter('all')}
-          >
-            <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
-              Tất cả
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterOption, activeFilter === 'completed' && styles.activeFilter]}
-            onPress={() => setActiveFilter('completed')}
-          >
-            <Text style={[styles.filterText, activeFilter === 'completed' && styles.activeFilterText]}>
-              Hoàn thành
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterOption, activeFilter === 'canceled' && styles.activeFilter]}
-            onPress={() => setActiveFilter('canceled')}
-          >
-            <Text style={[styles.filterText, activeFilter === 'canceled' && styles.activeFilterText]}>
-              Đã hủy
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
       <FlatList
-        data={filteredOrders}
+        data={orders}
         renderItem={renderOrderItem}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>Không tìm thấy đơn hàng nào</Text>
+            <TouchableOpacity 
+              style={styles.reloadButtonLarge}
+              onPress={onRefresh}
+            >
+              <RefreshCw size={24} color={colors.primary} />
+              <Text style={styles.reloadText}>Tải lại</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -214,6 +224,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: colors.text,
+  },
+  header: {
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -365,5 +378,26 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: colors.subtext,
+  },
+  reloadButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '10',
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  reloadButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '10',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+  reloadText: {
+    marginLeft: 8,
+    color: colors.primary,
+    fontWeight: '500',
   },
 });

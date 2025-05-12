@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
 import { User, Wallet, ArrowRight, LogOut } from 'lucide-react-native';
 import { formatCurrency } from '@/utils/formatters';
 import { socket } from '@/services/socket';
+import { API_URL } from '@/constants/config';
+import { getAccessToken, removeAccessToken } from '@/storange/auth.storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface WalletData {
   shipperId: string;
@@ -14,11 +17,12 @@ interface WalletData {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthStore((state) => ({
+  const { user, setUser } = useAuthStore((state) => ({
     user: state.user,
-    logout: state.logout
+    setUser: state.setUser
   }));
   const [balance, setBalance] = useState(0);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -31,6 +35,7 @@ export default function ProfileScreen() {
       }
     };
 
+    socket.off('walletBalance', handleWalletUpdate);
     socket.on('walletBalance', handleWalletUpdate);
 
     return () => {
@@ -38,8 +43,56 @@ export default function ProfileScreen() {
     };
   }, [user]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      const token = await getAccessToken();
+      
+      if (token) {
+        try {
+          // Call logout API
+          const response = await fetch(`${API_URL}/api/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (!response.ok) {
+            console.warn('Logout API call failed:', response.status);
+          }
+        } catch (apiError) {
+          console.warn('Logout API error:', apiError);
+        }
+      }
+
+      // Clear local storage
+      await removeAccessToken();
+      await AsyncStorage.removeItem('shipper-auth-storage');
+
+      // Reset state
+      setUser(null as any);
+      
+      // Disconnect socket
+      socket.disconnect();
+
+      // Navigate to login
+      router.replace('/auth/login');
+
+    } catch (error) {
+      console.error('Error during logout:', error);
+      Alert.alert(
+        'Lỗi',
+        'Không thể đăng xuất. Vui lòng thử lại.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const handleLogin = () => {
     router.replace('/auth/login');
   };
 
@@ -51,7 +104,7 @@ export default function ProfileScreen() {
         
         <TouchableOpacity 
           style={styles.button}
-          onPress={() => router.push('/auth/login')}
+          onPress={handleLogin}
         >
           <Text style={styles.buttonText}>Đăng nhập / Đăng ký</Text>
         </TouchableOpacity>
@@ -119,11 +172,14 @@ export default function ProfileScreen() {
       </View>
 
       <TouchableOpacity 
-        style={styles.logoutButton}
+        style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
         onPress={handleLogout}
+        disabled={isLoggingOut}
       >
         <LogOut size={20} color={colors.danger} />
-        <Text style={styles.logoutText}>Đăng xuất</Text>
+        <Text style={styles.logoutText}>
+          {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -258,5 +314,8 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  logoutButtonDisabled: {
+    opacity: 0.7,
   },
 });

@@ -11,21 +11,28 @@ import {
   Platform,
   Linking,
   Switch,
+  ActivityIndicator,
+  Modal,
+  Animated,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { useOrderStore } from '@/store/orderStore';
 import { colors } from '@/constants/colors';
-import { Package, Clock, ChevronRight, MapPin, Phone } from 'lucide-react-native';
+import { Package, Clock, ChevronRight, MapPin, Phone, Truck, CheckCircle2, XCircle, RefreshCw } from 'lucide-react-native';
 import { socket } from '@/utils/socket';
 import * as Location from 'expo-location';
 import { Order } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
-import io from 'socket.io-client';
+import { API_URL } from '@/constants/config';
+
+const { width } = Dimensions.get('window');
 
 export default function OrdersScreen(): JSX.Element {
   const router = useRouter();
-  const { acceptOrder, orders } = useOrderStore();
+  const { acceptOrder } = useOrderStore();
   const { user } = useAuthStore();
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -33,7 +40,42 @@ export default function OrdersScreen(): JSX.Element {
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [isOnline, setIsOnline] = useState(false);
-  const socket = io("https://f25f-171-246-69-224.ngrok-free.app");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [modalScale] = useState(new Animated.Value(0));
+  const [modalOpacity] = useState(new Animated.Value(0));
+  const [modalTranslateY] = useState(new Animated.Value(50));
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch active orders
+  const fetchActiveOrders = async () => {
+    try {
+      if (!user?.shipperId) return;
+      
+      const response = await fetch(`${API_URL}/api/shipper/orders/${user.shipperId}`);
+      const data = await response.json();
+      
+      if (data.EC === "0" && data.DT) {
+        // Lọc ra các đơn hàng chưa được giao (không có trạng thái 'delivered')
+        const activeOrders = data.DT.activeOrders.filter(
+          (order: Order) => order.orderStatus !== 'delivered'
+        );
+        setOrders(activeOrders);
+      } else {
+        console.error('Error fetching orders:', data.EM);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveOrders();
+  }, [user?.shipperId]);
 
   // Kiểm tra cài đặt vị trí và quyền
   const checkLocationSettings = async (): Promise<boolean> => {
@@ -117,9 +159,9 @@ export default function OrdersScreen(): JSX.Element {
     requestLocationPermission();
   }, []);
 
-  // Lắng nghe các đơn mới và gửi cập nhật vị trí định kỳ
+  // Gửi cập nhật vị trí định kỳ chỉ khi đang online
   useEffect(() => {
-    if (!currentLocation || !user?.id) return;
+    if (!currentLocation || !user?.shipperId || !isOnline) return;
 
     const intervalId = setInterval(async () => {
       try {
@@ -128,7 +170,7 @@ export default function OrdersScreen(): JSX.Element {
         });
         setCurrentLocation(loc);
         socket.emit('current_location', {
-          shipperId: user.id,
+          shipperId: user.shipperId,
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
@@ -137,71 +179,38 @@ export default function OrdersScreen(): JSX.Element {
       }
     }, 5000);
 
-    // Đăng ký lắng nghe sự kiện đơn hàng mới
-    const handleNewOrder = (data: { orderId: string; orderDetails: Order }) => {
-      console.log('📦 Nhận đơn hàng mới:', data);
-      Alert.alert(
-        'Đơn hàng mới',
-        `Bạn có muốn nhận đơn ${data.orderId} không?`,
-        [
-          { text: 'Từ chối', style: 'cancel' },
-          {
-            text: 'Chấp nhận',
-            onPress: () => handleAcceptOrder(data.orderId, data.orderDetails),
-          },
-        ],
-      );
-    };
-
-    // Lắng nghe sự kiện đơn hàng mới
-    socket.on('new_order_assigned', handleNewOrder);
-
-    // Cleanup function
     return () => {
       clearInterval(intervalId);
-      socket.off('new_order_assigned', handleNewOrder);
     };
-  }, [currentLocation, user?.id]);
+  }, [currentLocation, user?.shipperId, isOnline]);
 
   const handleAcceptOrder = (orderId: string, orderDetails: Order) => {
-    if (!user?.id) {
+    // Kiểm tra trạng thái hoạt động trước khi nhận đơn
+    if (!isOnline) {
+      Alert.alert(
+        'Chưa bật trạng thái hoạt động',
+        'Bạn cần bật trạng thái hoạt động để nhận đơn hàng mới.'
+      );
+      return;
+    }
+    if (!user?.shipperId) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin shipper');
       return;
     }
 
-    console.log('🔄 Đang chấp nhận đơn hàng:', { orderId, shipperId: user.id });
-
-    socket.emit('accept_order', {
-      orderId,
-      shipperId: user.id,
-    });
-
     socket.once('order_response', (response: any) => {
       console.log('📥 Phản hồi từ server:', response);
       if (response.success) {
-        // Thêm đơn hàng vào store với trạng thái goingToRestaurant
-        const orderToAdd = {
-          ...response.orderDetails,
-          orderStatus: 'goingToRestaurant' // Trạng thái ban đầu khi shipper nhận đơn
-        };
-        acceptOrder(orderId, orderToAdd);
-        
-        // Đợi một chút để đảm bảo store đã được cập nhật
-        setTimeout(() => {
-          router.push(`/order/${orderId}`);
-        }, 100);
+        acceptOrder(orderId, user.shipperId);
+        fetchActiveOrders(); // Refresh orders list
+        router.push(`/order/${orderId}`);
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể chấp nhận đơn.');
       }
     });
-
-    setTimeout(() => {
-      socket.off('order_response');
-      Alert.alert('Hết thời gian', 'Không nhận được phản hồi từ server.');
-    }, 10000);
   };
 
-   const sendLocation = async () => {
+  const sendLocation = async () => {
     if (!currentLocation) {
       const ok = await requestLocationPermission();
       if (!ok) return;
@@ -323,17 +332,70 @@ export default function OrdersScreen(): JSX.Element {
     );
   };
 
+  const showStatusChangeModal = (message: string) => {
+    setStatusMessage(message);
+    setShowStatusModal(true);
+    
+    // Reset animations
+    modalScale.setValue(0);
+    modalOpacity.setValue(0);
+    modalTranslateY.setValue(50);
+
+    // Start animations
+    Animated.parallel([
+      Animated.spring(modalScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }),
+      Animated.spring(modalTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7
+      })
+    ]).start();
+
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(modalScale, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        }),
+        Animated.timing(modalTranslateY, {
+          toValue: 50,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ]).start(() => {
+        setShowStatusModal(false);
+      });
+    }, 2000);
+  };
+
   // Xử lý cập nhật trạng thái online
   const handleOnlineStatusChange = async (value: boolean) => {
-    if (!user?._id) {
-      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+    if (!user?.shipperId) {
+      showStatusChangeModal('Không tìm thấy thông tin người dùng');
       return;
     }
 
     try {
       // Gửi yêu cầu cập nhật trạng thái
       socket.emit('update_online_status', {
-        shipperId: user._id,
+        shipperId: user.shipperId,
         isOnline: value
       });
 
@@ -341,24 +403,23 @@ export default function OrdersScreen(): JSX.Element {
       socket.once('online_status_response', (response) => {
         if (response.success) {
           setIsOnline(value);
-          Alert.alert(
-            'Thành công',
+          showStatusChangeModal(
             value ? 'Bạn đã bắt đầu nhận đơn hàng' : 'Bạn đã tạm dừng nhận đơn hàng'
           );
         } else {
-          Alert.alert('Lỗi', response.message || 'Không thể cập nhật trạng thái');
+          showStatusChangeModal(response.message || 'Không thể cập nhật trạng thái');
         }
       });
     } catch (error) {
       console.error('Error updating online status:', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái online');
+      showStatusChangeModal('Không thể cập nhật trạng thái online');
     }
   };
 
   // Lắng nghe sự kiện cập nhật trạng thái từ server
   useEffect(() => {
     socket.on('shipper_status_updated', (data) => {
-      if (data.shipperId === user?._id) {
+      if (data.shipperId === user?.shipperId) {
         setIsOnline(data.isOnline);
       }
     });
@@ -366,28 +427,130 @@ export default function OrdersScreen(): JSX.Element {
     return () => {
       socket.off('shipper_status_updated');
     };
-  }, [user?._id]);
+  }, [user?.shipperId]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchActiveOrders();
+    setRefreshing(false);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Đang tải đơn hàng...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.pageTitle}>Đơn hàng đang giao</Text>
+        <TouchableOpacity 
+          style={styles.reloadButton}
+          onPress={onRefresh}
+        >
+          <RefreshCw size={20} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       {renderLocationStatus()}
-      <Text style={styles.pageTitle}>Current Deliveries</Text>
+      
       {orders.length > 0 ? (
         <FlatList
           data={orders}
           renderItem={renderOrderCard}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
         />
       ) : (
         <View style={styles.emptyContainer}>
           <Package size={60} color={colors.border} />
-          <Text style={styles.emptyTitle}>No Active Orders</Text>
+          <Text style={styles.emptyTitle}>Chưa có đơn hàng</Text>
           <Text style={styles.emptyDescription}>
-            When you accept new delivery requests, they will appear here.
+            Khi bạn nhận đơn hàng mới, chúng sẽ xuất hiện ở đây.
           </Text>
+          <TouchableOpacity 
+            style={styles.reloadButtonLarge}
+            onPress={onRefresh}
+          >
+            <RefreshCw size={24} color={colors.primary} />
+            <Text style={styles.reloadText}>Tải lại</Text>
+          </TouchableOpacity>
         </View>
       )}
+
+      <Modal
+        visible={showStatusModal}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowStatusModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View 
+            style={[
+              styles.modalContent,
+              { 
+                transform: [
+                  { scale: modalScale },
+                  { translateY: modalTranslateY }
+                ],
+                opacity: modalOpacity
+              }
+            ]}
+          >
+            <View style={styles.modalIconContainer}>
+              {isOnline ? (
+                <>
+                  <View style={[styles.iconBackground, { backgroundColor: colors.primary + '20' }]}>
+                    <Truck size={32} color={colors.primary} />
+                  </View>
+                  <View style={styles.statusIndicator}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.iconBackground, { backgroundColor: colors.error + '20' }]}>
+                    <Package size={32} color={colors.error} />
+                  </View>
+                  <View style={styles.statusIndicator}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.error }]} />
+                  </View>
+                </>
+              )}
+            </View>
+            <Text style={styles.modalTitle}>
+              {isOnline ? 'Sẵn sàng nhận đơn' : 'Đã tạm dừng'}
+            </Text>
+            <Text style={styles.modalText}>{statusMessage}</Text>
+            <View style={styles.modalProgressBar}>
+              <Animated.View 
+                style={[
+                  styles.progressFill,
+                  { 
+                    backgroundColor: isOnline ? colors.primary : colors.error,
+                    width: modalScale.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%']
+                    })
+                  }
+                ]} 
+              />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -483,5 +646,114 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
     marginBottom: 10,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 24,
+    borderRadius: 20,
+    alignItems: 'center',
+    width: width * 0.85,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+  },
+  modalIconContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  iconBackground: {
+    padding: 16,
+    borderRadius: 50,
+    marginBottom: 8,
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 16,
+    color: colors.subtext,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalProgressBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  reloadButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '10',
+  },
+  reloadButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '10',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+  reloadText: {
+    marginLeft: 8,
+    color: colors.primary,
+    fontWeight: '500',
   },
 });

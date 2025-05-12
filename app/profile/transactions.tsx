@@ -28,8 +28,8 @@ export default function TransactionsScreen() {
 
   const fetchTransactions = async () => {
     try {
-      if (user?.id) {
-        const response = await fetch(`${API_URL}/api/wallet/transactions/${user.id}`);
+      if (user?.shipperId) {
+        const response = await fetch(`https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/wallet/transactions/${user.shipperId}`);
         const data = await response.json();
         
         if (data.EC === "0" && data.DT) {
@@ -65,31 +65,13 @@ export default function TransactionsScreen() {
           styles.amount,
           { color: item.type === 'deposit' ? colors.success : colors.error }
         ]}>
-          {item.type === 'deposit' ? '+' : '-'}{formatCurrency(item.amount)}
+          {item.type === 'deposit' ? '+' : ''}{formatCurrency(item.amount)}
         </Text>
       </View>
 
       <View style={styles.transactionDetails}>
         <Text style={styles.bankName}>{item.bankName}</Text>
         <Text style={styles.date}>{new Date(item.createdAt).toLocaleString('vi-VN')}</Text>
-      </View>
-
-      <View style={[
-        styles.statusBadge,
-        { backgroundColor: item.status === 'success' ? colors.success + '20' : 
-                        item.status === 'pending' ? colors.warning + '20' : 
-                        colors.error + '20' }
-      ]}>
-        <Text style={[
-          styles.statusText,
-          { color: item.status === 'success' ? colors.success : 
-                  item.status === 'pending' ? colors.warning : 
-                  colors.error }
-        ]}>
-          {item.status === 'success' ? 'Thành công' : 
-           item.status === 'pending' ? 'Đang xử lý' : 
-           'Thất bại'}
-        </Text>
       </View>
     </View>
   );

@@ -7,6 +7,7 @@ import {
   getAccessToken,
   removeAccessToken,
 } from "../storange/auth.storage";
+import { API_URL } from "@/constants/config";
 
 interface AuthState {
   user: User | null;
@@ -47,12 +48,42 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (isLoading) => set({ isLoading }),
 
       logout: async () => {
-        await removeAccessToken();
-        set({
-          user: null,
-          isAuthenticated: false,
-          token: null,
-        });
+        try {
+          // Clear local storage first
+          await removeAccessToken();
+          await AsyncStorage.removeItem('auth-storage');
+          // Reset state
+          set({
+            user: null,
+            isAuthenticated: false,
+            token: null,
+          });
+          // Try to call logout API, but don't wait for it
+          const token = await getAccessToken();
+          if (token) {
+            fetch(`${API_URL}/api/logout`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }).catch(error => {
+              console.log('Logout API call failed:', error);
+              // Ignore API errors since we've already cleared local data
+            });
+          }
+
+        } catch (error) {
+          console.error('Error during logout:', error);
+          // Even if there's an error, we still want to clear local data
+          await removeAccessToken();
+          await AsyncStorage.removeItem('auth-storage');
+          set({
+            user: null,
+            isAuthenticated: false,
+            token: null,
+          });
+        }
       },
 
       updateUserLocation: (location: Location) => {

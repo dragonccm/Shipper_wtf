@@ -84,7 +84,7 @@ interface OrderState {
   currentOrder: Order | null;
 
   // Actions
-  fetchOrders: () => Promise<void>;
+  fetchOrders: (shipperId: string) => Promise<void>;
   acceptOrder: (orderId: string, shipperId: string) => Promise<boolean>;
   declineOrder: (orderId: string) => Promise<void>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
@@ -104,13 +104,13 @@ export const useOrderStore = create<OrderState>()(
       error: null,
       currentOrder: null,
 
-      fetchOrders: async () => {
+      fetchOrders: async (shipperId: string) => {
         if (get().isLoading) return;
 
         set({ isLoading: true, error: null });
 
         try {
-          const response = await fetch(`https://f25f-171-246-69-224.ngrok-free.app/api/getorder/681f06bf71a1380d27f81ecd`, {
+          const response = await fetch(`https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/shipper/orders/${shipperId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'

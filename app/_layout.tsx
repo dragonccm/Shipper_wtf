@@ -3,10 +3,13 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Location from "expo-location";
 import { useEffect, useState } from "react";
-import { Platform, View, ActivityIndicator, Text } from "react-native";
+import { Platform, View, ActivityIndicator, Text, Alert } from "react-native";
 import { ErrorBoundary } from "./error-boundary";
 import { colors } from "@/constants/colors";
+import { socket } from '@/utils/socket';
+import { useAuthStore } from '@/store/authStore';
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
@@ -21,8 +24,10 @@ export default function RootLayout() {
   });
   
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  // const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  // const checkAuth = useAuthStore((state) => state.checkAuth);
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const [isOnline, setIsOnline] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
 
   // Kiểm tra xác thực khi ứng dụng khởi động
   useEffect(() => {
@@ -49,6 +54,79 @@ export default function RootLayout() {
     }
   }, [error]);
 
+  useEffect(() => {
+    if (!user?.shipperId) return;
+
+    const handleNewOrder = (data: { orderId: string; orderDetails: any }) => {
+      Alert.alert(
+        'Đơn hàng mới',
+        `Bạn có muốn nhận đơn ${data.orderId} không?`,
+        [
+          { text: 'Từ chối', style: 'cancel' },
+          {
+            text: 'Chấp nhận',
+            onPress: () => {
+              // Gửi xác nhận nhận đơn qua socket hoặc gọi API
+              socket.emit('accept_order', {
+                orderId: data.orderId,
+                shipperId: user.shipperId,
+              });
+              // Điều hướng tới chi tiết đơn hàng
+              router.push(`/order/${data.orderId}`);
+            },
+          },
+        ],
+      );
+    };
+
+    socket.on('new_order_assigned', handleNewOrder);
+
+    return () => {
+      socket.off('new_order_assigned', handleNewOrder);
+    };
+  }, [user?.shipperId]);
+
+  // Lắng nghe trạng thái online từ server (nếu có)
+  useEffect(() => {
+    if (!user?.shipperId) return;
+    const handleStatus = (data: { shipperId: string; isOnline: boolean }) => {
+      if (data.shipperId === user.shipperId) setIsOnline(data.isOnline);
+    };
+    socket.on('shipper_status_updated', handleStatus);
+    return () => socket.off('shipper_status_updated', handleStatus);
+  }, [user?.shipperId]);
+
+  // Gửi vị trí lên server định kỳ nếu online
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let isUnmounted = false;
+
+    const sendLocation = async () => {
+      if (!user?.shipperId || !isOnline) return;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (!isUnmounted) setCurrentLocation(loc);
+        socket.emit('current_location', {
+          shipperId: user.shipperId,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    if (user?.shipperId && isOnline) {
+      sendLocation(); // gửi ngay lần đầu
+      intervalId = setInterval(sendLocation, 5000);
+    }
+
+    return () => {
+      isUnmounted = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [user?.shipperId, isOnline]);
+
   if (!loaded || isCheckingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -68,7 +146,6 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  // const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const router = useRouter();
   
   // Chuyển hướng người dùng dựa trên trạng thái xác thực

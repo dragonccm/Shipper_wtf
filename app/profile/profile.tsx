@@ -34,7 +34,7 @@ export default function ProfileScreen() {
     
     // Lắng nghe cập nhật số dư từ socket
     const handleWalletUpdate = (data: WalletData) => {
-      if (data.shipperId === user?.id) {
+      if (data.shipperId === user?.shipperId) {
         setBalance(data.balance);
       }
     };
@@ -48,8 +48,8 @@ export default function ProfileScreen() {
 
   const fetchWalletBalance = async () => {
     try {
-      if (user?.id) {
-        const response = await fetch(`${API_URL}/api/wallet/balance/${user.id}`);
+      if (user?.shipperId) {
+        const response = await fetch(`${API_URL}/api/wallet/balance/${user.shipperId}`);
         const data = await response.json();
         
         if (data.EC === "0" && data.DT) {
@@ -67,8 +67,8 @@ export default function ProfileScreen() {
 
   const fetchShipperOrders = async () => {
     try {
-      if (user?.id) {
-        const response = await fetch(`${API_URL}/api/shipper/orders/${user.id}`);
+      if (user?.shipperId) {
+        const response = await fetch(`${API_URL}/api/shipper/orders/${user.shipperId}`);
         const data = await response.json();
         
         if (data.EC === "0" && data.DT) {
@@ -88,9 +88,9 @@ export default function ProfileScreen() {
     if (!orderData) return;
 
     if (orderData.activeOrders.length > 0) {
-      router.push('/profile/orders');
+      router.push('/orders');
     } else if (orderData.completedOrders.length > 0) {
-      router.push('/profile/order-history');
+      router.push('/history');
     } else {
       // Hiển thị thông báo không có đơn hàng
       Alert.alert('Thông báo', 'Bạn chưa có đơn hàng nào');
@@ -131,7 +131,7 @@ export default function ProfileScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>
-              {user.name.charAt(0).toUpperCase()}
+              {/* {user.name.charAt(0).toUpperCase()} */}
             </Text>
           </View>
           <Text style={styles.userName}>{user.name}</Text>
@@ -183,6 +183,17 @@ export default function ProfileScreen() {
                       : 'Chưa có đơn hàng nào'}
                 </Text>
               )}
+            </View>
+          </TouchableOpacity>
+          {/* Thẻ lịch sử giao dịch */}
+          <TouchableOpacity
+            style={styles.tabItem}
+            onPress={() => router.push('/profile/transactions')}
+          >
+            <Feather name="repeat" size={24} color={colors.text} />
+            <View style={styles.tabContent}>
+              <Text style={styles.tabText}>Lịch sử giao dịch</Text>
+              <Text style={styles.tabSubtext}>Xem các giao dịch nạp/rút tiền</Text>
             </View>
           </TouchableOpacity>
         </View>

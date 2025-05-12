@@ -26,11 +26,11 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // Redirect if already authenticated
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/');
-    }
-  }, [isAuthenticated]);
+  // React.useEffect(() => {
+  //   if (isAuthenticated) {
+  //     router.replace('/');
+  //   }
+  // }, [isAuthenticated]);
 
   const formatPhoneNumber = (text: string) => {
     // Remove non-numeric characters
@@ -74,7 +74,7 @@ export default function LoginScreen() {
       const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
 
       // Login API call
-      const loginRes = await fetch("https://f25f-171-246-69-224.ngrok-free.app/api/login_phone", {
+      const loginRes = await fetch("https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/login_phone", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,6 +90,7 @@ export default function LoginScreen() {
 
       if (loginData.EC === "0" && loginData.DT) {
         await setToken(loginData.DT.access_token);
+        console.log("loginData.DT.account",loginData.DT.account);
         setUser(loginData.DT.account);
         setAuthenticated(true);
         router.replace('/');
@@ -192,14 +193,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.registerButton}
-            onPress={() => router.push('/auth/register')}
-          >
-            <Text style={styles.registerButtonText}>
-              Don't have an account? Register
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <Text style={styles.termsText}>

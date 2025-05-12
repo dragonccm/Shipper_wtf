@@ -8,6 +8,10 @@ import { socket } from '@/utils/socket';
 import { Feather } from '@expo/vector-icons';
 import { API_URL } from '@/constants/config';
 import BankSelectionModal from '@/components/BankSelectionModal';
+import { Image } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
+import ViewShot, { captureRef } from 'react-native-view-shot';
 
 interface WalletData {
   shipperId: string;
@@ -37,6 +41,17 @@ interface TransactionNotification {
   message: string;
 }
 
+interface ReceiptData {
+  visible: boolean;
+  transactionId: string;
+  amount: number;
+  bankName: string;
+  bankLogo: string;
+  accountNumber: string;
+  accountName: string;
+  date: Date;
+}
+
 export default function WalletScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -55,13 +70,23 @@ export default function WalletScreen() {
     status: 'success',
     message: ''
   });
+  const [receipt, setReceipt] = useState<ReceiptData>({
+    visible: false,
+    transactionId: '',
+    amount: 0,
+    bankName: '',
+    bankLogo: '',
+    accountNumber: '',
+    accountName: '',
+    date: new Date()
+  });
 
   // Lấy số dư ban đầu từ API
   useEffect(() => {
     const fetchWalletBalance = async () => {
       try {
-        if (user?.id) {
-          const response = await fetch(`${API_URL}/api/wallet/balance/${user.id}`);
+        if (user?.shipperId) {
+          const response = await fetch(`https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/wallet/balance/${user.shipperId}`);
           const data = await response.json();
           
           if (data.EC === "0" && data.DT) {
@@ -85,7 +110,7 @@ export default function WalletScreen() {
   useEffect(() => {
     if (user) {
       const handleWalletUpdate = (data: WalletData) => {
-        if (data.shipperId === user?.id) {
+        if (data.shipperId === user?.shipperId) {
           setBalance(data.balance);
         }
       };
@@ -124,9 +149,25 @@ export default function WalletScreen() {
       setNotification(prev => ({ ...prev, visible: false }));
     }, 3000);
   };
+  
+  const showReceipt = (amount: number, bank: Bank) => {
+    // Tạo mã giao dịch ngẫu nhiên
+    const transactionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+    
+    setReceipt({
+      visible: true,
+      transactionId,
+      amount,
+      bankName: bank.name,
+      bankLogo: bank.logo,
+      accountNumber: bank.accountNumber,
+      accountName: bank.accountName,
+      date: new Date()
+    });
+  };
 
   const handleTransaction = async () => {
-    if (!selectedBank || !amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (!selectedBank || !amount || isNaN(Number(amount))) {
       showTransactionNotification(
         transactionType,
         Number(amount),
@@ -137,15 +178,28 @@ export default function WalletScreen() {
       return;
     }
 
-    if (transactionType === 'withdraw' && Number(amount) > balance) {
-      showTransactionNotification(
-        transactionType,
-        Number(amount),
-        selectedBank.name,
-        'error',
-        'Số dư không đủ'
-      );
-      return;
+    // Chỉ kiểm tra số dư và số tiền > 0 khi rút tiền
+    if (transactionType === 'withdraw') {
+      if (Number(amount) <= 0) {
+        showTransactionNotification(
+          transactionType,
+          Number(amount),
+          selectedBank.name,
+          'error',
+          'Số tiền rút phải lớn hơn 0'
+        );
+        return;
+      }
+      if (Number(amount) > balance) {
+        showTransactionNotification(
+          transactionType,
+          Number(amount),
+          selectedBank.name,
+          'error',
+          `Số dư không đủ. Số dư hiện tại: ${formatCurrency(balance)}`
+        );
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -155,7 +209,7 @@ export default function WalletScreen() {
       socket.emit(
         transactionType === 'deposit' ? 'wallet_deposit' : 'wallet_withdraw',
         {
-          shipperId: user?.id,
+          shipperId: user?.shipperId,
           amount: Number(amount),
           bankId: selectedBank.id,
           bankName: selectedBank.name,
@@ -178,6 +232,12 @@ export default function WalletScreen() {
                 ? `Bạn đã nạp ${formatCurrency(Number(amount))} vào ví WTF Food qua ${selectedBank.name}`
                 : `Bạn đã rút ${formatCurrency(Number(amount))} từ ví WTF Food về ${selectedBank.name}`
             );
+            
+            // Hiển thị hóa đơn nếu là rút tiền thành công
+            if (transactionType === 'withdraw') {
+              showReceipt(Number(amount), selectedBank);
+            }
+            
             setAmount('');
             if (response.newBalance) {
               setBalance(response.newBalance);
@@ -330,6 +390,111 @@ export default function WalletScreen() {
         </View>
       </View>
     </View>
+      </Modal>
+
+      {/* Receipt Modal */}
+      <Modal
+        visible={receipt.visible}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.receiptOverlay}>
+          <View style={styles.receiptContent}>
+            <View style={styles.receiptHeader}>
+              <Text style={styles.receiptTitle}>HÓA ĐƠN RÚT TIỀN</Text>
+              <TouchableOpacity 
+                style={styles.closeReceiptButton}
+                onPress={() => setReceipt(prev => ({ ...prev, visible: false }))}
+              >
+                <Feather name="x" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.receiptLogoContainer}>
+              <View style={styles.receiptLogo}>
+                <Text style={styles.receiptLogoText}>WTF</Text>
+              </View>
+              <Text style={styles.receiptCompanyName}>WTF FOOD</Text>
+            </View>
+
+            <View style={styles.receiptDivider} />
+
+            <View style={styles.receiptStatusContainer}>
+              <Feather name="check-circle" size={40} color={colors.success} />
+              <Text style={styles.receiptStatusText}>THÀNH CÔNG</Text>
+            </View>
+
+            <View style={styles.receiptAmountContainer}>
+              <Text style={styles.receiptAmountLabel}>Số tiền đã rút</Text>
+              <Text style={styles.receiptAmount}>{formatCurrency(receipt.amount)}</Text>
+            </View>
+
+            <View style={styles.receiptDivider} />
+
+            <View style={styles.receiptDetailsContainer}>
+              <View style={styles.receiptDetailRow}>
+                <Text style={styles.receiptDetailLabel}>Mã giao dịch</Text>
+                <Text style={styles.receiptDetailValue}>{receipt.transactionId}</Text>
+              </View>
+
+              <View style={styles.receiptDetailRow}>
+                <Text style={styles.receiptDetailLabel}>Thời gian</Text>
+                <Text style={styles.receiptDetailValue}>
+                  {receipt.date.toLocaleString('vi-VN')}
+                </Text>
+              </View>
+
+              <View style={styles.receiptDetailRow}>
+                <Text style={styles.receiptDetailLabel}>Phương thức</Text>
+                <Text style={styles.receiptDetailValue}>Rút tiền về tài khoản ngân hàng</Text>
+              </View>
+
+              <View style={styles.receiptBankContainer}>
+                <View style={styles.receiptBankHeader}>
+                  <Text style={styles.receiptBankTitle}>Thông tin ngân hàng</Text>
+                </View>
+
+                <View style={styles.receiptBankContent}>
+                  <Image 
+                    source={{ uri: receipt.bankLogo }} 
+                    style={styles.receiptBankLogo} 
+                    resizeMode="contain"
+                  />
+                  <View style={styles.receiptBankDetails}>
+                    <Text style={styles.receiptBankName}>{receipt.bankName}</Text>
+                    <Text style={styles.receiptAccountNumber}>{receipt.accountNumber}</Text>
+                    <Text style={styles.receiptAccountName}>{receipt.accountName}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+
+            <View style={styles.receiptActions}>
+              <TouchableOpacity style={styles.receiptActionButton} onPress={async () => {
+                try {
+                  const { status } = await MediaLibrary.requestPermissionsAsync();
+                  if (status !== 'granted') {
+                    Alert.alert('Lỗi', 'Bạn cần cấp quyền truy cập bộ nhớ để lưu hóa đơn.');
+                    return;
+                  }
+                  const uri = await captureRef(receiptRef, {
+                    format: 'png',
+                    quality: 1,
+                  });
+                  const asset = await MediaLibrary.createAssetAsync(uri);
+                  await MediaLibrary.createAlbumAsync('WTF Receipts', asset, false);
+                  Alert.alert('Thành công', 'Hóa đơn đã được lưu vào thư viện ảnh.');
+                } catch (error) {
+                  Alert.alert('Lỗi', 'Không thể lưu hóa đơn. Vui lòng thử lại.');
+                }
+              }}>
+                <Feather name="download" size={20} color={colors.white} />
+                <Text style={styles.receiptActionText}>Lưu hóa đơn</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -501,5 +666,193 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontWeight: '600',
     color: colors.subtext,
+  },
+  // Receipt styles
+  receiptOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  receiptContent: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  receiptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 16,
+  },
+  receiptTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  closeReceiptButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 4,
+  },
+  receiptLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiptLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  receiptLogoText: {
+    color: colors.white,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  receiptCompanyName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  receiptDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 16,
+  },
+  receiptStatusContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiptStatusText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.success,
+    marginTop: 8,
+  },
+  receiptAmountContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiptAmountLabel: {
+    fontSize: 14,
+    color: colors.subtext,
+    marginBottom: 4,
+  },
+  receiptAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  receiptDetailsContainer: {
+    marginBottom: 16,
+  },
+  receiptDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  receiptDetailLabel: {
+    fontSize: 14,
+    color: colors.subtext,
+  },
+  receiptDetailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  receiptBankContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  receiptBankHeader: {
+    backgroundColor: colors.primary + '20',
+    padding: 8,
+  },
+  receiptBankTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  receiptBankContent: {
+    flexDirection: 'row',
+    padding: 12,
+    alignItems: 'center',
+  },
+  receiptBankLogo: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
+  },
+  receiptBankDetails: {
+    flex: 1,
+  },
+  receiptBankName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  receiptAccountNumber: {
+    fontSize: 14,
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  receiptAccountName: {
+    fontSize: 12,
+    color: colors.subtext,
+  },
+  receiptQRContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiptQRCode: {
+    width: 120,
+    height: 120,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  receiptQRText: {
+    fontSize: 12,
+    color: colors.subtext,
+  },
+  receiptActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  receiptActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.primary,
+    padding: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  receiptActionText: {
+    color: colors.white,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

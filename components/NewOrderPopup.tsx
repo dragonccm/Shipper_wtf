@@ -17,8 +17,8 @@ import * as Haptics from "expo-haptics";
 
 interface NewOrderPopupProps {
   order: Order;
-  onAccept: (orderId: string) => void;
-  onDecline: (orderId: string) => void;
+  onAccept: () => void;
+  onDecline: () => void;
 }
 
 const { width } = Dimensions.get("window");
@@ -71,8 +71,8 @@ export const NewOrderPopup: React.FC<NewOrderPopupProps> = ({
       duration: 300,
       useNativeDriver: true
     }).start(() => {
-      onAccept(order.id);
-      router.push(`/order/${order.id}`);
+      onAccept();
+      router.push(`/order/${order._id}`);
     });
   };
   
@@ -86,7 +86,7 @@ export const NewOrderPopup: React.FC<NewOrderPopupProps> = ({
       duration: 300,
       useNativeDriver: true
     }).start(() => {
-      onDecline(order.id);
+      onDecline();
     });
   };
   
@@ -98,7 +98,7 @@ export const NewOrderPopup: React.FC<NewOrderPopupProps> = ({
       ]}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>New Order!</Text>
+        <Text style={styles.title}>Đơn hàng mới!</Text>
         <View style={styles.countdownContainer}>
           <Text style={styles.orderNumber}>{order.orderNumber}</Text>
           <Text style={styles.countdownText}>{timeLeft}s</Text>
@@ -106,32 +106,28 @@ export const NewOrderPopup: React.FC<NewOrderPopupProps> = ({
       </View>
       
       <View style={styles.restaurantRow}>
-        <Image 
-          source={{ uri: order.restaurant.photoUrl }} 
-          style={styles.restaurantImage} 
-        />
         <View style={styles.restaurantInfo}>
-          <Text style={styles.restaurantName}>{order.restaurant.name}</Text>
+          <Text style={styles.restaurantName}>{order.restaurant?.name}</Text>
           <Text style={styles.address} numberOfLines={1}>
-            {order.restaurant.location.address}
+            {order.restaurant?.address}
           </Text>
         </View>
       </View>
       
       <View style={styles.detailsRow}>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Items</Text>
+          <Text style={styles.detailLabel}>Số món</Text>
           <Text style={styles.detailValue}>
             {order.items.reduce((sum, item) => sum + item.quantity, 0)}
           </Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Distance</Text>
+          <Text style={styles.detailLabel}>Khoảng cách</Text>
           <Text style={styles.detailValue}>3.2 km</Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Earnings</Text>
-          <Text style={styles.detailValue}>{formatCurrency(30000)}</Text>
+          <Text style={styles.detailLabel}>Thu nhập</Text>
+          <Text style={styles.detailValue}>{formatCurrency(order.shippingFee)}</Text>
         </View>
       </View>
       
@@ -149,13 +145,13 @@ export const NewOrderPopup: React.FC<NewOrderPopupProps> = ({
           style={[styles.button, styles.declineButton]} 
           onPress={handleDecline}
         >
-          <Text style={styles.declineButtonText}>Decline</Text>
+          <Text style={styles.declineButtonText}>Từ chối</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.button, styles.acceptButton]} 
           onPress={handleAccept}
         >
-          <Text style={styles.acceptButtonText}>Accept</Text>
+          <Text style={styles.acceptButtonText}>Nhận đơn</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -201,9 +197,8 @@ const styles = StyleSheet.create({
   },
   countdownText: {
     fontSize: 14,
+    color: colors.danger,
     fontWeight: "600",
-    color: colors.warning,
-    marginTop: 4,
   },
   restaurantRow: {
     flexDirection: "row",
@@ -211,38 +206,34 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   restaurantImage: {
-    width: 60,
-    height: 60,
+    width: 48,
+    height: 48,
     borderRadius: 8,
+    marginRight: 12,
   },
   restaurantInfo: {
-    marginLeft: 12,
     flex: 1,
   },
   restaurantName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     color: colors.text,
+    marginBottom: 4,
   },
   address: {
     fontSize: 14,
     color: colors.subtext,
-    marginTop: 2,
   },
   detailsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   detailItem: {
     alignItems: "center",
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: colors.subtext,
     marginBottom: 4,
   },
@@ -256,11 +247,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     borderRadius: 2,
     marginBottom: 16,
-    overflow: "hidden",
   },
   progressBar: {
     height: "100%",
-    backgroundColor: colors.warning,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
   },
   actions: {
     flexDirection: "row",
@@ -271,26 +262,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
-    justifyContent: "center",
   },
   declineButton: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.danger,
     marginRight: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   acceptButton: {
     backgroundColor: colors.primary,
     marginLeft: 8,
   },
   declineButtonText: {
+    color: colors.white,
     fontSize: 16,
     fontWeight: "600",
-    color: colors.text,
   },
   acceptButtonText: {
+    color: colors.white,
     fontSize: 16,
     fontWeight: "600",
-    color: "white",
   },
 });

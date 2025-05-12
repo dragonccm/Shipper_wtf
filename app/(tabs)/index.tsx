@@ -91,7 +91,7 @@ export default function HomeScreen() {
 
   // Xử lý cập nhật trạng thái online
   const handleOnlineStatusChange = async (value: boolean) => {
-    if (!user?.id) {
+    if (!user?.shipperId) {
       Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
       return;
     }
@@ -99,7 +99,7 @@ export default function HomeScreen() {
     try {
       // Gửi yêu cầu cập nhật trạng thái
       socket.emit('update_online_status', {
-        shipperId: user.id,
+        shipperId: user.shipperId,
         isOnline: value
       });
 
@@ -124,7 +124,7 @@ export default function HomeScreen() {
   // Lắng nghe sự kiện cập nhật trạng thái từ server
   useEffect(() => {
     socket.on('shipper_status_updated', (data) => {
-      if (data.shipperId === user?.id) {
+      if (data.shipperId === user?.shipperId) {
         setIsOnline(data.isOnline);
       }
     });
@@ -132,7 +132,7 @@ export default function HomeScreen() {
     return () => {
       socket.off('shipper_status_updated');
     };
-  }, [user?.id]);
+  }, [user?.shipperId]);
 
   if (!currentLocation) {
     return (

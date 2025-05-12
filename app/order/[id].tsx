@@ -10,11 +10,11 @@ import {
   Platform,
   Linking
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { colors } from "@/constants/colors";
-// Đã loại bỏ: import { useOrderStore } from "@/store/orderStore";
 import { Button } from "@/components/Button";
 import { formatCurrency, formatDate, formatPhoneNumber } from "@/utils/formatters";
 import { OrderStatus, Location as LocationType } from "@/types";
@@ -22,7 +22,7 @@ import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { useOrderStore } from "@/store/orderStore";
 import { useRouter } from "expo-router";
-import io from "socket.io-client";
+import { socket } from "@/utils/socket";
 import { Order } from '../../types';
 
 export default function OrderDetailScreen() {
@@ -31,9 +31,10 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<LocationType | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<string | null>(null);
   const router = useRouter();
-  const socket = io("https://f25f-171-246-69-224.ngrok-free.app");
-  
+
   // Lấy vị trí hiện tại của shipper
   useEffect(() => {
     (async () => {
@@ -50,21 +51,75 @@ export default function OrderDetailScreen() {
       });
     })();
   }, []);
+
+  // Đăng ký lắng nghe socket chỉ một lần
   useEffect(() => {
+    if (!socket) return;
+
+    const handleResponse = (response: any) => {
+      console.log('CLIENT nhận phản hồi trạng thái:', JSON.stringify(response, null, 2));
+      if (
+        response &&
+        response.success &&
+        response.orderDetails &&
+        Array.isArray(response.orderDetails.items) &&
+        response.orderDetails.items.length > 0
+      ) {
+        // Đảm bảo luôn đồng bộ status với orderStatus từ backend
+        setOrder({
+          ...response.orderDetails,
+          status: response.orderDetails.orderStatus
+        });
+        setIsUpdating(false);
+        setPendingUpdate(null);
+        if (response.orderDetails.orderStatus === 'delivered') {
+          AsyncStorage.removeItem(`order_${response.orderDetails._id}`);
+        } else {
+          AsyncStorage.setItem(`order_${response.orderDetails._id}`, JSON.stringify({
+            ...response.orderDetails,
+            status: response.orderDetails.orderStatus
+          }));
+        }
+        Alert.alert('Thành công', 'Cập nhật trạng thái đơn hàng thành công');
+      } else {
+        setIsUpdating(false);
+        setPendingUpdate(null);
+        Alert.alert('Lỗi', response?.message || 'Cập nhật trạng thái thất bại');
+      }
+    };
+
+    socket.on('order_status_update_response', handleResponse);
+
+    return () => {
+      socket.off('order_status_update_response', handleResponse);
+    };
+  }, [socket, pendingUpdate]);
+
+  // Lấy order từ cache trước, nếu không có thì fetch từ server
+  useEffect(() => {
+    let isMounted = true;
     const fetchOrder = async () => {
       try {
-        const response = await fetch(`https://f25f-171-246-69-224.ngrok-free.app/api/getorder/${id}`, {
+        // Luôn thử lấy từ AsyncStorage trước
+        const cachedOrder = await AsyncStorage.getItem(`order_${id}`);
+        if (cachedOrder) {
+          const parsedOrder = JSON.parse(cachedOrder);
+          if (isMounted) {
+            setOrder(parsedOrder);
+            setLoading(false);
+          }
+        }
+
+        // Luôn fetch mới để đảm bảo dữ liệu cập nhật
+        const response = await fetch(`https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
           }
         });
-        if (!response.ok) {
-          throw new Error('Failed to fetch order');
-        }
-        
+        if (!response.ok) throw new Error('Failed to fetch order');
         const data = await response.json();
-        console.log("Update status response:", JSON.stringify(data, null, 2)); 
+
         if (data.EC === "0" && data.DT) {
           const orderData: Order = {
             ...data.DT,
@@ -98,19 +153,21 @@ export default function OrderDetailScreen() {
             shipper: data.DT.shipper,
             __v: data.DT.__v
           };
-          setOrder(orderData);
+          await AsyncStorage.setItem(`order_${id}`, JSON.stringify(orderData));
+          if (isMounted) setOrder(orderData);
         } else {
           throw new Error(data.EM || 'Failed to fetch order');
         }
       } catch (error) {
         console.error("Error fetching order:", error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch order');
+        if (isMounted) setError(error instanceof Error ? error.message : 'Failed to fetch order');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchOrder();
-  }, []);
+    return () => { isMounted = false; };
+  }, [id,order,isUpdating]);
 
   const handleCall = (phoneNumber: string) => {
     if (!phoneNumber || !order) return;
@@ -134,58 +191,51 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleStatusUpdate = async (newStatus: string) => {
-    if (!socket || !order) return;
+  // Sửa ánh xạ trạng thái để đúng logic chuyển tiếp
+  const statusWorkflow: OrderStatus[] = [
+    "goingToRestaurant",
+    "arrivedAtRestaurant",
+    "pickedUp",
+    "delivering",
+    "arrivedAtCustomer",
+    "delivered"
+  ];
+
+  const handleStatusUpdate = async () => {
+    if (!socket || !order || isUpdating) return;
 
     try {
-      // Validate status transition
-      const validStatuses = ["goingToRestaurant", "arrivedAtRestaurant", "pickedUp", "delivering", "arrivedAtCustomer", "delivered"];
-      if (!validStatuses.includes(newStatus)) {
-        Alert.alert('Lỗi', 'Trạng thái không hợp lệ');
+      const currentIndex = statusWorkflow.indexOf(order.orderStatus || order.status);
+      const nextStatus = statusWorkflow[currentIndex + 1];
+      if (!nextStatus || nextStatus === order.orderStatus) {
+        Alert.alert('Lỗi', 'Không thể chuyển sang trạng thái tiếp theo');
         return;
       }
 
-      // Set timeout for response
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Không nhận được phản hồi từ máy chủ')), 10000);
+      setIsUpdating(true);
+      setPendingUpdate(order._id);
+
+      socket.emit('order_status_update', {
+        orderId: order._id,
+        status: nextStatus,
+        shipperId: order.shipper
       });
 
-      // Create promise for socket response
-      const responsePromise = new Promise((resolve, reject) => {
-        const handleResponse = (response: any) => {
-          if (response.success) {
-            resolve(response);
-          } else {
-            reject(new Error(response.message));
-          }
-        };
-
-        socket.on('order_status_update_response', handleResponse);
-        socket.on('order_status_update_confirmation', handleResponse);
-
-        // Send status update request
-        socket.emit('order_status_update', {
-          orderId: order._id,
-          status: newStatus,
-          shipperId: order.shipper
-        });
-      });
-
-      // Wait for either response or timeout
-      const response = await Promise.race([responsePromise, timeoutPromise]);
-      
-      // Update local state with new order details
-      if (response && 'orderDetails' in response) {
-        setOrder(response.orderDetails);
-      }
-
-      Alert.alert('Thành công', 'Cập nhật trạng thái đơn hàng thành công');
+      setTimeout(() => {
+        if (isUpdating) {
+          setIsUpdating(false);
+          setPendingUpdate(null);
+          Alert.alert('Lỗi', 'Không nhận được phản hồi từ máy chủ');
+        }
+      }, 10000);
     } catch (error) {
-      console.error('Error updating order status:', error);
+      setIsUpdating(false);
+      setPendingUpdate(null);
       Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể cập nhật trạng thái đơn hàng');
     }
   };
 
+  // Sửa lại nút cập nhật trạng thái để lấy text theo orderStatus
   const getNextStatusButtonText = (): string => {
     if (!order) return "";
     const statusTextMap: Record<OrderStatus, string> = {
@@ -196,10 +246,10 @@ export default function OrderDetailScreen() {
       arrivedAtCustomer: "Hoàn thành giao hàng",
       delivered: "Đã hoàn thành"
     };
-    return statusTextMap[order.status];
+    return statusTextMap[order.orderStatus || order.status];
   };
 
-  if (loading) {
+  if (loading || isUpdating) {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
@@ -207,7 +257,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.headerTitle}>Chi tiết đơn hàng</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <Text>Đang tải thông tin đơn hàng...</Text>
+          <Text>{isUpdating ? "Đang cập nhật trạng thái..." : "Đang tải thông tin đơn hàng..."}</Text>
         </View>
       </View>
     );
@@ -349,7 +399,7 @@ export default function OrderDetailScreen() {
               />
             </View>
             <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>{order.items[0].food.restaurant.name || 'Nhà hàng không xác định'}</Text>
+              <Text style={styles.restaurantName}>{order.items[0]?.food?.restaurant?.name || 'Nhà hàng không xác định'}</Text>
               {order.restaurant?.location?.latitude && order.restaurant?.location?.longitude ? (
                 <Text style={styles.restaurantAddress}>
                   Tọa độ: {order.restaurant.location.latitude}, {order.restaurant.location.longitude}
@@ -359,11 +409,19 @@ export default function OrderDetailScreen() {
               )}
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(order.items[0].food.restaurant.phone || '')}
+                onPress={() => handleCall(
+                  (order.items[0]?.food?.restaurant?.phone) ||
+                  (order.restaurant?.phone) ||
+                  ''
+                )}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
-                  {formatPhoneNumber(order.items[0].food.restaurant.phone || '')}
+                  {formatPhoneNumber(
+                    (order.items[0]?.food?.restaurant?.phone) ||
+                    (order.restaurant?.phone) ||
+                    ''
+                  )}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -390,14 +448,22 @@ export default function OrderDetailScreen() {
 
           <View style={styles.customerInfo}>
             <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>{order.address?.name || 'Khách hàng không xác định'}</Text>
+              <Text style={styles.customerName}>{order.customer?.name || order.address?.name || 'Khách hàng không xác định'}</Text>
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(order.address?.phoneNumber || '')}
+                onPress={() => handleCall(
+                  (order.customer && order.customer.phone) ||
+                  (order.address && order.address.phoneNumber) ||
+                  ''
+                )}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
-                  {formatPhoneNumber(order.customer?.phone || '')}
+                  {formatPhoneNumber(
+                    (order.customer && order.customer.phone) ||
+                    (order.address && order.address.phoneNumber) ||
+                    ''
+                  )}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -507,7 +573,7 @@ export default function OrderDetailScreen() {
       {!isDelivered && (
         <Button
           title={getNextStatusButtonText()}
-          onPress={() => handleStatusUpdate(getNextStatusButtonText().split(' ')[0])}
+          onPress={handleStatusUpdate}
           style={styles.updateButton}
         />
       )}

@@ -39,24 +39,6 @@ export interface Discount {
   amount: number;
 }
 
-export interface Order {
-  id: string;
-  orderNumber: string;
-  restaurant: Restaurant;
-  customer: Customer;
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
-  totalAmount: number;
-  status: OrderStatus;
-  createdAt: string;
-  estimatedDeliveryTime: string;
-  customerLocation: Location;
-  notes?: string;
-}
-
 export interface User {
   id: string;
   name: string;
@@ -66,28 +48,6 @@ export interface User {
   isOnline: boolean;
   currentLocation?: Location;
   balance?: number;
-}
-
-export interface Order {
-  _id: string;
-  orderNumber?: string;
-  restaurant?: any;
-  user: User;
-  address: Address;
-  items: OrderItem[];
-  discount?: Discount;
-  totalPrice: number;
-  shippingFee: number;
-  finalAmount: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  orderStatus: OrderStatus;
-  createdAt: string;
-  updatedAt: string;
-  isRated?: boolean;
-  shipper?: any;
-  __v?: number;
-  notes?: string;
 }
 
 export interface OrderItem {
@@ -108,4 +68,39 @@ export interface Topping {
   topping: string;
   item: ToppingItem[];
   _id?: string;
+}
+
+export interface Order {
+  _id: string;
+  orderNumber?: string;
+  restaurant?: {
+    _id: string;
+    name: string;
+    phone: string;
+    location: {
+      latitude: number;
+      longitude: number;
+    };
+    address: string;
+  };
+  user: {
+    _id: string;
+    phone: string;
+    username: string;
+  };
+  address: Address;
+  items: OrderItem[];
+  discount?: Discount;
+  totalPrice: number;
+  shippingFee: number;
+  finalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  orderStatus: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+  isRated?: boolean;
+  shipper?: string;
+  __v?: number;
+  notes?: string;
 }

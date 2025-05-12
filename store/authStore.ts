@@ -7,6 +7,7 @@ import {
   getAccessToken,
   removeAccessToken,
 } from "../storange/auth.storage";
+import { API_URL } from "@/constants/config";
 
 // In ra console toàn bộ request và response
 const logRequestResponse = async (request: string, response: any) => {
@@ -53,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const token = await getAccessToken();
           if (token) {
-            const res = await fetch("https://f25f-171-246-69-224.ngrok-free.app/api/check-auth", {
+            const res = await fetch("https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app/api/check-auth", {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -90,7 +91,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting login with:", { phoneNumber });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://f25f-171-246-69-224.ngrok-free.app", {
+          const res = await fetch("  https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -128,7 +129,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting register with:", { phoneNumber, name });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://f25f-171-246-69-224.ngrok-free.app/api/register_phone", {
+          const res = await fetch("  https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app/api/register_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -165,23 +166,40 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         try {
-          const token = await getAccessToken();
-          if (token) {
-            await fetch("  https://f25f-171-246-69-224.ngrok-free.app/api/logout", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-          }
+          // Clear local storage first
           await removeAccessToken();
+          await AsyncStorage.removeItem('auth-storage');
+          // Reset state
           set({
             user: null,
             isAuthenticated: false,
             token: null,
           });
+          // Try to call logout API, but don't wait for it
+          const token = await getAccessToken();
+          if (token) {
+            fetch(`${API_URL}/api/logout`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }).catch(error => {
+              console.log('Logout API call failed:', error);
+              // Ignore API errors since we've already cleared local data
+            });
+          }
+
         } catch (error) {
-          console.error("logout error:", error);
+          console.error('Error during logout:', error);
+          // Even if there's an error, we still want to clear local data
+          await removeAccessToken();
+          await AsyncStorage.removeItem('auth-storage');
+          set({
+            user: null,
+            isAuthenticated: false,
+            token: null,
+          });
         }
       },
 
