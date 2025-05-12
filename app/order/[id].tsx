@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-sau đây hãy tạo và sử dụng các socket để thực hiện các chức năng để tronng trang vận đơn nút xác nhận của nó sẽ cập nhật các trạng thái đơn hàng khới đầu là pending là shipper chỉ nhận được thông báo và sau khi nhấn xác nhận đơn hàng thì cập nhật trạng thái của đơn tương ứng và cập nhật id của shipper trong đơn hàng tuỳ theo shipper đang ở bước nào thì cập nhật trạng thái đơn hàng tương ứng [id].tsx orderStore.ts authStore.ts socketConfig.js models hãy luôn chú ý luồn sự kiên để đảm bảo hoạt động đúng tại một vài chỗ tôi gắn id cứng là vì bên app  đặt hàng chưa hoạt động nên tôi không thể nhận các sự kiên từ bên đó như sự kiện có đơn hang mới và shipper tôi có vấn đề là hiện tại chỉ có tôi để test nên tài khoản của tôi là cái duy nhất hoạt động đúng ra nó nên là lấy shipper gần với nhà hàng của đơn hàng nhất bây giờ hãy tạm thời dùng shipper tôi đặt mặc định trong code để test trước
 import {
   View,
   Text,
@@ -21,73 +20,10 @@ import { formatCurrency, formatDate, formatPhoneNumber } from "@/utils/formatter
 import { OrderStatus, Location as LocationType } from "@/types";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
-
-interface Order {
-  _id: string;
-  user: {
-    _id: string;
-    phone: string;
-    username: string;
-  };
-  address: {
-    name: string;
-    phoneNumber: string;
-    address: string;
-    latitude: number;
-    longitude: number;
-  };
-  restaurant?: {
-    _id: string;
-    name: string;
-    phone: string;
-    location: {
-      latitude: number;
-      longitude: number;
-    };
-    address: string;
-  };
-  items: Array<{
-    _id: string;
-    food: {
-      _id: string;
-      restaurant: {
-        address: string;
-        _id: string;
-        name: string;
-        phone: string;
-      };
-      name: string;
-      price: number;
-    };
-    quantity: number;
-    price: number;
-    toppings?: Array<{
-      topping: string;
-      item: Array<{
-        id: string;
-        price: number;
-        _id: string;
-      }>;
-      _id: string;
-    }>;
-  }>;
-  totalPrice: number;
-  shippingFee: number;
-  finalAmount: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  status: OrderStatus;
-  note?: string;
-  discount?: {
-    voucherId?: string;
-    amount: number;
-  };
-  createdAt?: string;
-  updatedAt?: string;
-  shipper?: string;
-  isRated?: boolean;
-  __v?: number;
-}
+import { useOrderStore } from "@/store/orderStore";
+import { useRouter } from "expo-router";
+import io from "socket.io-client";
+import { Order } from '../../types';
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -95,6 +31,8 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<LocationType | null>(null);
+  const router = useRouter();
+  const socket = io("https://f25f-171-246-69-224.ngrok-free.app");
   
   // Lấy vị trí hiện tại của shipper
   useEffect(() => {
@@ -115,7 +53,7 @@ export default function OrderDetailScreen() {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/getorder/${id}`, {
+        const response = await fetch(`https://f25f-171-246-69-224.ngrok-free.app/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
@@ -196,102 +134,69 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleUpdateStatus = async () => {
-    if (!order) return;
-    if (Platform.OS !== "web") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!socket || !order) return;
 
-    const statusMap: Record<OrderStatus, OrderStatus> = {
-      goingToRestaurant: "arrivedAtRestaurant",
-      arrivedAtRestaurant: "pickedUp",
-      pickedUp: "delivering",
-      delivering: "arrivedAtCustomer",
-      arrivedAtCustomer: "delivered",
-      delivered: "delivered"
-    };
-
-    const nextStatus = statusMap[order.status as OrderStatus];
-    if (nextStatus === "delivered") {
-      Alert.alert(
-        "Complete Delivery",
-        "Are you sure you want to mark this order as delivered?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Confirm",
-            onPress: async () => {
-              try {
-                const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/shipper/order/${order._id}/status`, {
-                  method: "PUT",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ status: nextStatus })
-                });
-
-                if (!response.ok) {
-                  throw new Error('Failed to update order status');
-                }
-
-                const data = await response.json();
-                if (data.EC === "0") {
-                  setOrder((prev: Order | null) => prev ? { ...prev, status: nextStatus } : null);
-                } else {
-                  throw new Error(data.EM || 'Failed to update order status');
-                }
-              } catch (error) {
-                console.error("Error updating order status:", error);
-                Alert.alert(
-                  "Error",
-                  "Failed to update order status. Please try again."
-                );
-              }
-            }
-          }
-        ]
-      );
-    } else {
-      try {
-        const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/shipper/order/${order._id}/status`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ status: nextStatus })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update order status');
-        }
-
-        const data = await response.json();
-        if (data.EC === "0") {
-          setOrder((prev: Order | null) => prev ? { ...prev, status: nextStatus } : null);
-        } else {
-          throw new Error(data.EM || 'Failed to update order status');
-        }
-      } catch (error) {
-        console.error("Error updating order status:", error);
-        Alert.alert(
-          "Error",
-          "Failed to update order status. Please try again."
-        );
+    try {
+      // Validate status transition
+      const validStatuses = ["goingToRestaurant", "arrivedAtRestaurant", "pickedUp", "delivering", "arrivedAtCustomer", "delivered"];
+      if (!validStatuses.includes(newStatus)) {
+        Alert.alert('Lỗi', 'Trạng thái không hợp lệ');
+        return;
       }
+
+      // Set timeout for response
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Không nhận được phản hồi từ máy chủ')), 10000);
+      });
+
+      // Create promise for socket response
+      const responsePromise = new Promise((resolve, reject) => {
+        const handleResponse = (response: any) => {
+          if (response.success) {
+            resolve(response);
+          } else {
+            reject(new Error(response.message));
+          }
+        };
+
+        socket.on('order_status_update_response', handleResponse);
+        socket.on('order_status_update_confirmation', handleResponse);
+
+        // Send status update request
+        socket.emit('order_status_update', {
+          orderId: order._id,
+          status: newStatus,
+          shipperId: order.shipper
+        });
+      });
+
+      // Wait for either response or timeout
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
+      // Update local state with new order details
+      if (response && 'orderDetails' in response) {
+        setOrder(response.orderDetails);
+      }
+
+      Alert.alert('Thành công', 'Cập nhật trạng thái đơn hàng thành công');
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể cập nhật trạng thái đơn hàng');
     }
   };
 
   const getNextStatusButtonText = (): string => {
     if (!order) return "";
     const statusTextMap: Record<OrderStatus, string> = {
-      goingToRestaurant: "Arrived at Restaurant",
-      arrivedAtRestaurant: "Picked Up Order",
-      pickedUp: "Start Delivery",
-      delivering: "Arrived at Customer",
-      arrivedAtCustomer: "Complete Delivery",
-      delivered: "Completed"
+      goingToRestaurant: "Đã đến nhà hàng",
+      arrivedAtRestaurant: "Đã lấy hàng",
+      pickedUp: "Bắt đầu giao hàng",
+      delivering: "Đã đến nơi giao",
+      arrivedAtCustomer: "Hoàn thành giao hàng",
+      delivered: "Đã hoàn thành"
     };
-    return statusTextMap[order.status as OrderStatus];
+    return statusTextMap[order.status];
   };
 
   if (loading) {
@@ -324,12 +229,8 @@ export default function OrderDetailScreen() {
 
   const isDelivered = order.status === "delivered";
   
-  // Xác định hiển thị vị trí nào dựa trên trạng thái đơn hàng
-  const showRestaurantLocation = ["goingToRestaurant", "arrivedAtRestaurant"].includes(order.status);
-  const showCustomerLocation = ["pickedUp", "delivering", "arrivedAtCustomer"].includes(order.status);
-
   // Ánh xạ trạng thái đơn hàng sang các bước trong timeline
-  const ORDER_STATUSES = {
+  const ORDER_STATUSES: Record<OrderStatus, number> = {
     goingToRestaurant: 0,
     arrivedAtRestaurant: 1,
     pickedUp: 2,
@@ -337,6 +238,24 @@ export default function OrderDetailScreen() {
     arrivedAtCustomer: 4,
     delivered: 5
   };
+
+  // Xác định hiển thị vị trí nào dựa trên trạng thái đơn hàng
+  const showRestaurantLocation = ["goingToRestaurant", "arrivedAtRestaurant"].includes(order.status);
+  const showCustomerLocation = ["pickedUp", "delivering", "arrivedAtCustomer"].includes(order.status);
+
+  // Ánh xạ trạng thái đơn hàng sang các bước trong timeline
+  const getStatusStep = (status: OrderStatus): number => {
+    return ORDER_STATUSES[status];
+  };
+
+  // Danh sách các trạng thái theo thứ tự
+  const statusList: OrderStatus[] = [
+    'goingToRestaurant',
+    'arrivedAtRestaurant',
+    'pickedUp',
+    'delivering',
+    'delivered'
+  ];
 
   return (
     <View style={styles.container}>
@@ -379,23 +298,23 @@ export default function OrderDetailScreen() {
 
           {/* Status Timeline */}
           <View style={styles.timeline}>
-            {["goingToRestaurant", "arrivedAtRestaurant", "pickedUp", "delivering", "delivered"].map((status, index) => {
-              const isActive = ORDER_STATUSES[order.status] >= ORDER_STATUSES[status];
-              const isLast = index === 4;
+            {statusList.map((status, index) => {
+              const isActive = getStatusStep(order.status) >= getStatusStep(status);
+              const isLast = index === statusList.length - 1;
 
               return (
                 <View key={status} style={styles.timelineItem}>
-                  <View style={[styles.timelineDot, isActive ? styles.activeDot : {}]} />
-                  {!isLast && <View style={[styles.timelineLine, isActive ? styles.activeLine : {}]} />}
-                  <Text style={[styles.timelineText, isActive ? styles.activeTimelineText : {}]}>
+                  <View style={[styles.timelineDot, isActive && styles.timelineDotActive]} />
+                  {!isLast && <View style={[styles.timelineLine, isActive && styles.timelineLineActive]} />}
+                  <Text style={[styles.timelineText, isActive && styles.timelineTextActive]}>
                     {status === "goingToRestaurant"
-                      ? "Đến nhà hàng"
+                      ? "Đang đến nhà hàng"
                       : status === "arrivedAtRestaurant"
                         ? "Tại nhà hàng"
                         : status === "pickedUp"
                           ? "Lấy hàng"
                           : status === "delivering"
-                            ? "Giao hàng"
+                            ? "Đang giao hàng"
                             : "Hoàn thành"}
                   </Text>
                 </View>
@@ -494,23 +413,23 @@ export default function OrderDetailScreen() {
 
         {/* Order Items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Món ăn đã đặt</Text>
-
-          {order.items?.map((item: any, index: number) => (
-            <View key={item._id || index} style={styles.orderItem}>
-              <View style={styles.orderItemHeader}>
-                <View style={styles.orderItemQuantity}>
-                  <Text style={styles.quantityText}>{item.quantity}x</Text>
-                </View>
-                <View style={styles.orderItemDetails}>
-                  <Text style={styles.orderItemName}>{item.food?.name || `Món ${index + 1}`}</Text>
-                  <Text style={styles.orderItemPrice}>{formatCurrency(item.food?.price || 0)}</Text>
-                </View>
-              </View>
-              {index < (order.items?.length || 0) - 1 && <View style={styles.itemDivider} />}
+          <Text style={styles.sectionTitle}>Chi tiết đơn hàng</Text>
+          {order.items.map((item) => (
+            <View key={item._id} style={styles.itemRow}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+              <Text style={styles.itemPrice}>{item.price.toLocaleString('vi-VN')}đ</Text>
             </View>
           ))}
         </View>
+
+        {/* Order Notes */}
+        {order.notes && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ghi chú</Text>
+            <Text style={styles.noteText}>{order.notes}</Text>
+          </View>
+        )}
 
         {/* Payment Info */}
         <View style={styles.section}>
@@ -588,7 +507,7 @@ export default function OrderDetailScreen() {
       {!isDelivered && (
         <Button
           title={getNextStatusButtonText()}
-          onPress={handleUpdateStatus}
+          onPress={() => handleStatusUpdate(getNextStatusButtonText().split(' ')[0])}
           style={styles.updateButton}
         />
       )}
@@ -700,7 +619,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     zIndex: 1,
   },
-  activeDot: {
+  timelineDotActive: {
     backgroundColor: colors.primary,
   },
   timelineLine: {
@@ -712,7 +631,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E0E0E0",
     zIndex: 0,
   },
-  activeLine: {
+  timelineLineActive: {
     backgroundColor: colors.primary,
   },
   timelineText: {
@@ -720,7 +639,7 @@ const styles = StyleSheet.create({
     color: "#757575",
     textAlign: "center",
   },
-  activeTimelineText: {
+  timelineTextActive: {
     color: "#212529",
     fontWeight: "600",
   },
@@ -826,47 +745,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#212529",
   },
-  orderItem: {
-    marginBottom: 12,
-  },
-  orderItemHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  orderItemQuantity: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 4,
-    width: 30,
-    height: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  quantityText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#212529",
-  },
-  orderItemDetails: {
-    flex: 1,
+  itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: 8,
   },
-  orderItemName: {
+  itemName: {
     fontSize: 15,
     fontWeight: "600",
     color: "#212529",
     flex: 1,
   },
-  orderItemPrice: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#212529",
+  itemQuantity: {
+    fontSize: 14,
+    color: "#6c757d",
   },
-  itemDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-    marginVertical: 12,
+  itemPrice: {
+    fontSize: 14,
+    color: "#212529",
   },
   paymentRow: {
     flexDirection: "row",
@@ -947,14 +843,6 @@ const styles = StyleSheet.create({
     color: "#4CAF50",
   },
   orderInfoRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  infoRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  infoText: {
     flexDirection: "row",
     marginBottom: 8,
   },

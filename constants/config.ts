@@ -1,0 +1,1 @@
+export const API_URL = 'https://f25f-171-246-69-224.ngrok-free.app'; // Thay đổi URL này theo backend của bạn 

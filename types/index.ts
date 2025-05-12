@@ -62,10 +62,12 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  photoUrl: string;
+  role: string;
   isOnline: boolean;
   currentLocation?: Location;
+  balance?: number;
 }
+
 export interface Order {
   _id: string;
   orderNumber?: string;
@@ -87,6 +89,7 @@ export interface Order {
   __v?: number;
   notes?: string;
 }
+
 export interface OrderItem {
   food: string;
   quantity: number;

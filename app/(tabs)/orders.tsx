@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   Linking,
+  Switch,
 } from 'react-native';
 import { useOrderStore } from '@/store/orderStore';
 import { colors } from '@/constants/colors';
@@ -19,15 +20,20 @@ import * as Location from 'expo-location';
 import { Order } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { useRouter } from 'expo-router';
+import { useAuthStore } from '@/store/authStore';
+import io from 'socket.io-client';
 
 export default function OrdersScreen(): JSX.Element {
   const router = useRouter();
   const { acceptOrder, orders } = useOrderStore();
+  const { user } = useAuthStore();
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('');
+  const [isOnline, setIsOnline] = useState(false);
+  const socket = io("https://f25f-171-246-69-224.ngrok-free.app");
 
   // Kiểm tra cài đặt vị trí và quyền
   const checkLocationSettings = async (): Promise<boolean> => {
@@ -113,7 +119,7 @@ export default function OrdersScreen(): JSX.Element {
 
   // Lắng nghe các đơn mới và gửi cập nhật vị trí định kỳ
   useEffect(() => {
-    if (!currentLocation) return;
+    if (!currentLocation || !user?.id) return;
 
     const intervalId = setInterval(async () => {
       try {
@@ -122,7 +128,7 @@ export default function OrdersScreen(): JSX.Element {
         });
         setCurrentLocation(loc);
         socket.emit('current_location', {
-          shipperId: '65f7b1a4e01c6f2d542a6666',
+          shipperId: user.id,
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
@@ -131,7 +137,9 @@ export default function OrdersScreen(): JSX.Element {
       }
     }, 5000);
 
-    socket.on('new_order_assigned', (data: { orderId: string; orderDetails: Order }) => {
+    // Đăng ký lắng nghe sự kiện đơn hàng mới
+    const handleNewOrder = (data: { orderId: string; orderDetails: Order }) => {
+      console.log('📦 Nhận đơn hàng mới:', data);
       Alert.alert(
         'Đơn hàng mới',
         `Bạn có muốn nhận đơn ${data.orderId} không?`,
@@ -143,24 +151,45 @@ export default function OrdersScreen(): JSX.Element {
           },
         ],
       );
-    });
+    };
 
+    // Lắng nghe sự kiện đơn hàng mới
+    socket.on('new_order_assigned', handleNewOrder);
+
+    // Cleanup function
     return () => {
       clearInterval(intervalId);
-      socket.off('new_order_assigned');
+      socket.off('new_order_assigned', handleNewOrder);
     };
-  }, [currentLocation]);
+  }, [currentLocation, user?.id]);
 
   const handleAcceptOrder = (orderId: string, orderDetails: Order) => {
+    if (!user?.id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin shipper');
+      return;
+    }
+
+    console.log('🔄 Đang chấp nhận đơn hàng:', { orderId, shipperId: user.id });
+
     socket.emit('accept_order', {
       orderId,
-      shipperId: '65f7b1a4e01c6f2d542a6666',
+      shipperId: user.id,
     });
 
     socket.once('order_response', (response: any) => {
+      console.log('📥 Phản hồi từ server:', response);
       if (response.success) {
-        acceptOrder(orderId, response.orderDetails);
-        router.push(`/order/${orderId}`);
+        // Thêm đơn hàng vào store với trạng thái goingToRestaurant
+        const orderToAdd = {
+          ...response.orderDetails,
+          orderStatus: 'goingToRestaurant' // Trạng thái ban đầu khi shipper nhận đơn
+        };
+        acceptOrder(orderId, orderToAdd);
+        
+        // Đợi một chút để đảm bảo store đã được cập nhật
+        setTimeout(() => {
+          router.push(`/order/${orderId}`);
+        }, 100);
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể chấp nhận đơn.');
       }
@@ -172,14 +201,14 @@ export default function OrdersScreen(): JSX.Element {
     }, 10000);
   };
 
-  const sendLocation = async () => {
+   const sendLocation = async () => {
     if (!currentLocation) {
       const ok = await requestLocationPermission();
       if (!ok) return;
     }
-    socket.emit('assign_order', { orderId: '681f06bf71a1380d27f81ecd' });
+    socket.emit('assign_order', '681f06bf71a1380d27f81ecd');
   };
-
+  
   const renderLocationStatus = () => {
     if (locationError) {
       return (
@@ -253,7 +282,7 @@ export default function OrdersScreen(): JSX.Element {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: item.orderStatus === 'delivering' ? colors.warning : colors.success },
+              { backgroundColor: item.orderStatus === 'goingToRestaurant' ? colors.warning : colors.success },
             ]}
           >
             <Text style={styles.statusText}>{item.orderStatus}</Text>
@@ -293,6 +322,51 @@ export default function OrdersScreen(): JSX.Element {
       </TouchableOpacity>
     );
   };
+
+  // Xử lý cập nhật trạng thái online
+  const handleOnlineStatusChange = async (value: boolean) => {
+    if (!user?._id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+      return;
+    }
+
+    try {
+      // Gửi yêu cầu cập nhật trạng thái
+      socket.emit('update_online_status', {
+        shipperId: user._id,
+        isOnline: value
+      });
+
+      // Lắng nghe phản hồi
+      socket.once('online_status_response', (response) => {
+        if (response.success) {
+          setIsOnline(value);
+          Alert.alert(
+            'Thành công',
+            value ? 'Bạn đã bắt đầu nhận đơn hàng' : 'Bạn đã tạm dừng nhận đơn hàng'
+          );
+        } else {
+          Alert.alert('Lỗi', response.message || 'Không thể cập nhật trạng thái');
+        }
+      });
+    } catch (error) {
+      console.error('Error updating online status:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái online');
+    }
+  };
+
+  // Lắng nghe sự kiện cập nhật trạng thái từ server
+  useEffect(() => {
+    socket.on('shipper_status_updated', (data) => {
+      if (data.shipperId === user?._id) {
+        setIsOnline(data.isOnline);
+      }
+    });
+
+    return () => {
+      socket.off('shipper_status_updated');
+    };
+  }, [user?._id]);
 
   return (
     <View style={styles.container}>

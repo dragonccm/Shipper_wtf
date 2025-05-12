@@ -1,57 +1,68 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { colors } from '@/constants/colors';
 import { CheckCircle, Clock, Calendar, ChevronDown, Filter, Search, XCircle } from 'lucide-react-native';
 import { TextInput } from 'react-native-gesture-handler';
+import { useAuthStore } from '@/store/authStore';
+import { formatCurrency } from '@/utils/formatters';
+import { API_URL } from '@/constants/config';
+
+interface Order {
+  _id: string;
+  restaurant: {
+    name: string;
+    address: string;
+  };
+  customer: {
+    name: string;
+    phone: string;
+  };
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  total: number;
+  status: string;
+  createdAt: string;
+  completedAt: string;
+}
 
 export default function HistoryScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const orderHistory = [
-    {
-      id: '923',
-      date: '12 Jul 2023',
-      time: '14:35',
-      customerName: 'Sarah Williams',
-      address: '78 Baker St, District 3',
-      amount: '$32.50',
-      status: 'completed',
-    },
-    {
-      id: '845',
-      date: '10 Jul 2023',
-      time: '09:20',
-      customerName: 'Mike Johnson',
-      address: '214 Pine Ave, District 1',
-      amount: '$18.75',
-      status: 'completed',
-    },
-    {
-      id: '782',
-      date: '08 Jul 2023',
-      time: '16:50',
-      customerName: 'David Lee',
-      address: '55 Ocean Blvd, District 7',
-      amount: '$27.30',
-      status: 'canceled',
-    },
-    {
-      id: '691',
-      date: '05 Jul 2023',
-      time: '11:15',
-      customerName: 'Lisa Chen',
-      address: '123 Garden St, District 2',
-      amount: '$41.20',
-      status: 'completed',
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const user = useAuthStore((state) => state.user);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      if (user?.id) {
+        const response = await fetch(`${API_URL}/api/shipper/orders/${user.id}`);
+        const data = await response.json();
+        
+        if (data.EC === "0" && data.DT) {
+          setOrders(data.DT.completedOrders);
+        } else {
+          console.error('Error fetching orders:', data.EM);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
   
-  const filteredOrders = orderHistory.filter(order => {
+  const filteredOrders = orders.filter(order => {
     const matchesSearch = searchQuery === '' || 
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.id.includes(searchQuery);
+      order.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order._id.includes(searchQuery);
     
     const matchesFilter = 
       activeFilter === 'all' || 
@@ -60,7 +71,7 @@ export default function HistoryScreen() {
     return matchesSearch && matchesFilter;
   });
   
-  const renderOrderItem = ({ item } : {item : any}) => (
+  const renderOrderItem = ({ item }: { item: Order }) => (
     <TouchableOpacity style={styles.orderCard}>
       <View style={styles.orderHeader}>
         <View style={[
@@ -73,35 +84,49 @@ export default function HistoryScreen() {
           }
         </View>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item.id}</Text>
-          <Text style={styles.customerName}>{item.customerName}</Text>
+          <Text style={styles.orderId}>Order #{item._id.slice(-4)}</Text>
+          <Text style={styles.customerName}>{item.customer.name}</Text>
         </View>
-        <Text style={styles.orderAmount}>{item.amount}</Text>
+        <Text style={styles.orderAmount}>{formatCurrency(item.total)}</Text>
       </View>
       
       <View style={styles.orderDetails}>
         <View style={styles.detailRow}>
           <Calendar size={14} color={colors.subtext} style={styles.detailIcon} />
-          <Text style={styles.detailText}>{item.date}</Text>
+          <Text style={styles.detailText}>
+            {new Date(item.completedAt).toLocaleDateString('vi-VN')}
+          </Text>
         </View>
         <View style={styles.detailRow}>
           <Clock size={14} color={colors.subtext} style={styles.detailIcon} />
-          <Text style={styles.detailText}>{item.time}</Text>
+          <Text style={styles.detailText}>
+            {new Date(item.completedAt).toLocaleTimeString('vi-VN')}
+          </Text>
         </View>
       </View>
       
       <View style={styles.addressContainer}>
-        <Text style={styles.addressText}>{item.address}</Text>
+        <Text style={styles.addressText}>{item.restaurant.address}</Text>
       </View>
       
       <View style={styles.divider} />
       
-      <TouchableOpacity style={styles.viewDetails}>
-        <Text style={styles.viewDetailsText}>View Full Details</Text>
-      </TouchableOpacity>
+      <View style={styles.restaurantInfo}>
+        <Text style={styles.restaurantName}>{item.restaurant.name}</Text>
+        <Text style={styles.phoneNumber}>{item.customer.phone}</Text>
+      </View>
     </TouchableOpacity>
   );
   
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Đang tải lịch sử đơn hàng...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
@@ -109,7 +134,7 @@ export default function HistoryScreen() {
           <Search size={18} color={colors.subtext} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search orders..."
+            placeholder="Tìm kiếm đơn hàng..."
             placeholderTextColor={colors.subtext}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -137,7 +162,7 @@ export default function HistoryScreen() {
             onPress={() => setActiveFilter('all')}
           >
             <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
-              All Orders
+              Tất cả
             </Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -145,7 +170,7 @@ export default function HistoryScreen() {
             onPress={() => setActiveFilter('completed')}
           >
             <Text style={[styles.filterText, activeFilter === 'completed' && styles.activeFilterText]}>
-              Completed
+              Hoàn thành
             </Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -153,7 +178,7 @@ export default function HistoryScreen() {
             onPress={() => setActiveFilter('canceled')}
           >
             <Text style={[styles.filterText, activeFilter === 'canceled' && styles.activeFilterText]}>
-              Canceled
+              Đã hủy
             </Text>
           </TouchableOpacity>
         </View>
@@ -162,11 +187,11 @@ export default function HistoryScreen() {
       <FlatList
         data={filteredOrders}
         renderItem={renderOrderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No orders found</Text>
+            <Text style={styles.emptyText}>Không tìm thấy đơn hàng nào</Text>
           </View>
         }
       />
@@ -179,6 +204,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.text,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -308,13 +343,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginVertical: 12,
   },
-  viewDetails: {
+  restaurantInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  viewDetailsText: {
+  restaurantName: {
     fontSize: 14,
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '500',
+  },
+  phoneNumber: {
+    fontSize: 14,
+    color: colors.subtext,
   },
   emptyContainer: {
     alignItems: 'center',

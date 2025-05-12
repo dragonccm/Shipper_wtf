@@ -74,7 +74,7 @@ export default function LoginScreen() {
       const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
 
       // Login API call
-      const loginRes = await fetch("https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/login_phone", {
+      const loginRes = await fetch("https://f25f-171-246-69-224.ngrok-free.app/api/login_phone", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

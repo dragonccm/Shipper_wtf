@@ -1,92 +1,206 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, Platform, Switch, Alert } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { colors } from '@/constants/colors';
-import { MapPin, Navigation, Search } from 'lucide-react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { MapPin, Navigation, Power, Clock } from 'lucide-react-native';
+import { socket } from '@/utils/socket';
+import { useAuthStore } from '@/store/authStore';
 
-export default function MapScreen() {
-  const [selectedAddress, setSelectedAddress] = useState("123 Delivery St, City");
-  
-  const initialRegion = {
-    latitude: 10.762622,
-    longitude: 106.660172,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
+export default function HomeScreen() {
+  const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
+  const [isWorking, setIsWorking] = useState(false);
+  const [workTime, setWorkTime] = useState(0);
+  const mapRef = useRef<MapView>(null);
+  const { user } = useAuthStore();
+  const workTimerRef = useRef<NodeJS.Timeout>();
+  const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      setCurrentLocation(location);
+
+      // Start watching position
+      Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 10,
+        },
+        (newLocation) => {
+          setCurrentLocation(newLocation);
+          // Emit location update to server
+          if (user?._id) {
+            socket.emit('current_location', {
+              shipperId: user._id,
+              latitude: newLocation.coords.latitude,
+              longitude: newLocation.coords.longitude,
+            });
+          }
+        }
+      );
+    })();
+
+    return () => {
+      if (workTimerRef.current) {
+        clearInterval(workTimerRef.current);
+      }
+    };
+  }, [user?._id]);
+
+  const handleCenterMap = () => {
+    if (currentLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    }
   };
 
-  const nearbyLocations = [
-    {
-      id: '1',
-      name: 'Shopping Mall',
-      address: '123 Shopping St',
-      distance: '1.2 km',
-    },
-    {
-      id: '2',
-      name: 'Downtown Market',
-      address: '456 Market Ave',
-      distance: '2.5 km',
-    },
-    {
-      id: '3',
-      name: 'City Center',
-      address: '789 Main St',
-      distance: '3.7 km',
+  const toggleWorkStatus = () => {
+    setIsWorking(!isWorking);
+    if (!isWorking) {
+      // Start work timer
+      workTimerRef.current = setInterval(() => {
+        setWorkTime((prev) => prev + 1);
+      }, 1000);
+    } else {
+      // Stop work timer
+      if (workTimerRef.current) {
+        clearInterval(workTimerRef.current);
+      }
+      setWorkTime(0);
     }
-  ];
+  };
+
+  const formatWorkTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Xử lý cập nhật trạng thái online
+  const handleOnlineStatusChange = async (value: boolean) => {
+    if (!user?.id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+      return;
+    }
+
+    try {
+      // Gửi yêu cầu cập nhật trạng thái
+      socket.emit('update_online_status', {
+        shipperId: user.id,
+        isOnline: value
+      });
+
+      // Lắng nghe phản hồi
+      socket.once('online_status_response', (response) => {
+        if (response.success) {
+          setIsOnline(value);
+          Alert.alert(
+            'Thành công',
+            value ? 'Bạn đã bắt đầu nhận đơn hàng' : 'Bạn đã tạm dừng nhận đơn hàng'
+          );
+        } else {
+          Alert.alert('Lỗi', response.message || 'Không thể cập nhật trạng thái');
+        }
+      });
+    } catch (error) {
+      console.error('Error updating online status:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái online');
+    }
+  };
+
+  // Lắng nghe sự kiện cập nhật trạng thái từ server
+  useEffect(() => {
+    socket.on('shipper_status_updated', (data) => {
+      if (data.shipperId === user?.id) {
+        setIsOnline(data.isOnline);
+      }
+    });
+
+    return () => {
+      socket.off('shipper_status_updated');
+    };
+  }, [user?.id]);
+
+  if (!currentLocation) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading location...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.mapContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={initialRegion}
-        >
-          <Marker
-            coordinate={{
-              latitude: 10.762622,
-              longitude: 106.660172,
-            }}
-            title="Your Location"
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Trang chủ</Text>
+        <View style={styles.onlineStatusContainer}>
+          <Text style={styles.onlineStatusText}>
+            {isOnline ? 'Đang hoạt động' : 'Tạm dừng'}
+          </Text>
+          <Switch
+            value={isOnline}
+            onValueChange={handleOnlineStatusChange}
+            trackColor={{ false: '#767577', true: colors.primary }}
+            thumbColor={isOnline ? '#fff' : '#f4f3f4'}
           />
-        </MapView>
-        
-        <View style={styles.searchBar}>
-          <Search size={20} color={colors.subtext} />
-          <Text style={styles.searchText}>Find destinations</Text>
         </View>
       </View>
-      
-      <View style={styles.bottomSheet}>
-        <View style={styles.bottomSheetHandle} />
-        
-        <View style={styles.currentLocationContainer}>
-          <MapPin size={20} color={colors.primary} />
-          <Text style={styles.currentLocationText}>{selectedAddress}</Text>
-          <TouchableOpacity style={styles.navigationButton}>
-            <Navigation size={20} color={colors.white} />
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        provider={PROVIDER_GOOGLE}
+        initialRegion={{
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+        showsUserLocation
+        showsMyLocationButton={false}
+      >
+        <Marker
+          coordinate={{
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+          }}
+        >
+          <View style={styles.markerContainer}>
+            <MapPin size={24} color={colors.primary} />
+          </View>
+        </Marker>
+      </MapView>
+
+      <View style={styles.controlsContainer}>
+        <View style={styles.controlsWrapper}>
+          <TouchableOpacity style={styles.controlButton} onPress={handleCenterMap}>
+            <Navigation size={24} color={colors.white} />
           </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.sectionTitle}>Nearby Pickup Locations</Text>
-        
-        {nearbyLocations.map(location => (
+
           <TouchableOpacity 
-            key={location.id}
-            style={styles.locationItem}
-            onPress={() => setSelectedAddress(location.address)}
+            style={[styles.controlButton, isWorking ? styles.workingButton : styles.notWorkingButton]} 
+            onPress={toggleWorkStatus}
           >
-            <View style={styles.locationContent}>
-              <Text style={styles.locationName}>{location.name}</Text>
-              <Text style={styles.locationAddress}>{location.address}</Text>
-            </View>
-            <Text style={styles.locationDistance}>{location.distance}</Text>
+            <Power size={24} color={colors.white} />
           </TouchableOpacity>
-        ))}
-        
-        <TouchableOpacity style={styles.availabilityButton}>
-          <Text style={styles.availabilityText}>I'm Available for Delivery</Text>
-        </TouchableOpacity>
+
+          <View style={styles.workTimeContainer}>
+            <Clock size={20} color={colors.white} />
+            <Text style={styles.workTimeText}>{formatWorkTime(workTime)}</Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -96,116 +210,115 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    padding: 16,
   },
-  mapContainer: {
-    width: '100%',
-    height: '60%',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  onlineStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 8,
+    borderRadius: 20,
+  },
+  onlineStatusText: {
+    marginRight: 8,
+    fontSize: 14,
+    color: '#666',
   },
   map: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
   },
-  searchBar: {
+  controlsContainer: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
+    bottom: Platform.OS === 'ios' ? 40 : 20,
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
-  searchText: {
-    marginLeft: 10,
-    color: colors.subtext,
-    fontSize: 16,
-  },
-  bottomSheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingTop: 10,
-    height: '45%',
+  controlsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 30,
+    padding: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     elevation: 5,
   },
-  bottomSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 15,
-  },
-  currentLocationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-  },
-  currentLocationText: {
-    flex: 1,
-    marginLeft: 10,
-    color: colors.text,
-    fontSize: 16,
-  },
-  navigationButton: {
+  controlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: colors.text,
+  workingButton: {
+    backgroundColor: colors.success,
   },
-  locationItem: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
+  notWorkingButton: {
+    backgroundColor: colors.danger,
+  },
+  workTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  locationContent: {
-    flex: 1,
-  },
-  locationName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  locationAddress: {
-    fontSize: 14,
-    color: colors.subtext,
-    marginTop: 4,
-  },
-  locationDistance: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  availabilityButton: {
     backgroundColor: colors.primary,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  availabilityText: {
+  workTimeText: {
     color: colors.white,
+    marginLeft: 8,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  markerContainer: {
+    backgroundColor: colors.white,
+    padding: 4,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
 });

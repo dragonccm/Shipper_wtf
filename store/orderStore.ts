@@ -1,11 +1,78 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { Order, OrderStatus } from "@/types";
+import { OrderStatus } from "@/types";
 import { orderAPI } from "@/services/api";
 import { socket } from "@/utils/socket";
 import { router } from "expo-router";
 // Không cần định nghĩa User ở đây vì chúng ta sẽ sử dụng token từ authAPI
+
+export interface Order {
+  _id: string;
+  orderStatus: OrderStatus;
+  shipper?: string;
+  user: {
+    _id: string;
+    phone: string;
+    username: string;
+  };
+  address: {
+    name: string;
+    phoneNumber: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  restaurant?: {
+    _id: string;
+    name: string;
+    phone: string;
+    location: {
+      latitude: number;
+      longitude: number;
+    };
+    address: string;
+  };
+  items: Array<{
+    _id: string;
+    food: {
+      _id: string;
+      restaurant: {
+        address: string;
+        _id: string;
+        name: string;
+        phone: string;
+      };
+      name: string;
+      price: number;
+    };
+    quantity: number;
+    price: number;
+    toppings?: Array<{
+      topping: string;
+      item: Array<{
+        id: string;
+        price: number;
+        _id: string;
+      }>;
+      _id: string;
+    }>;
+  }>;
+  totalPrice: number;
+  shippingFee: number;
+  finalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  note?: string;
+  discount?: {
+    voucherId?: string;
+    amount: number;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+  isRated?: boolean;
+  __v?: number;
+}
 
 interface OrderState {
   orders: Order[];
@@ -14,14 +81,16 @@ interface OrderState {
   pendingOrder: Order | null;
   isLoading: boolean;
   error: string | null;
+  currentOrder: Order | null;
 
   // Actions
   fetchOrders: () => Promise<void>;
-  acceptOrder: (orderId: string, orderData: Order) => Promise<void>;
+  acceptOrder: (orderId: string, shipperId: string) => Promise<boolean>;
   declineOrder: (orderId: string) => Promise<void>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   generateNewOrderRequest: () => void;
   clearPendingOrder: () => void;
+  setCurrentOrder: (order: Order | null) => void;
 }
 
 export const useOrderStore = create<OrderState>()(
@@ -33,6 +102,7 @@ export const useOrderStore = create<OrderState>()(
       pendingOrder: null,
       isLoading: false,
       error: null,
+      currentOrder: null,
 
       fetchOrders: async () => {
         if (get().isLoading) return;
@@ -40,7 +110,7 @@ export const useOrderStore = create<OrderState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const response = await fetch(`https://cffe-2402-800-63b5-dab2-516a-9e03-cd68-2d5.ngrok-free.app/api/getorder/681f06bf71a1380d27f81ecd`, {
+          const response = await fetch(`https://f25f-171-246-69-224.ngrok-free.app/api/getorder/681f06bf71a1380d27f81ecd`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'
@@ -67,10 +137,21 @@ export const useOrderStore = create<OrderState>()(
               __v: result.DT.__v
             };
             const orders = [transformedOrder];
+            
+            // Phân loại đơn hàng dựa trên trạng thái
+            const activeOrders = orders.filter((order: Order) => 
+              order.orderStatus !== "delivered" && order.orderStatus !== "canceled"
+            );
+            
+            const completedOrders = orders.filter((order: Order) => 
+              order.orderStatus === "delivered"
+            );
+
             set({
               orders: orders,
-              activeOrders: orders.filter((order: Order) => order.orderStatus !== "delivered"),
-              completedOrders: orders.filter((order: Order) => order.orderStatus === "delivered"),
+              activeOrders: activeOrders,
+              completedOrders: completedOrders,
+              currentOrder: transformedOrder,
               isLoading: false
             });
           } else {
@@ -88,146 +169,25 @@ export const useOrderStore = create<OrderState>()(
         }
       },
 
-      acceptOrder: async (orderId: string, orderData: Order) => {
-        const { pendingOrder, isLoading } = get();
-        socket.emit("accept_order", { orderId, shipperId: "65f7b1a4e01c6f2d542a7777" })
-        if (isLoading || !pendingOrder || pendingOrder.id !== orderId) return;
+      acceptOrder: async (orderId: string, shipperId: string) => {
+        return new Promise((resolve, reject) => {
+          socket.emit('accept_order', { orderId, shipperId });
 
-        set({ isLoading: true, error: null });
-        const f = {
-          "discount": {
-            "voucherId": "681c9b3b9a23041dbc3027fb",
-            "amount": 5000
-          },
-          "_id": "681f06bf71a1380d27f81ecd",
-          "user": {
-            "_id": "6814a71243a532607e592b08",
-            "phone": "0944034769",
-            "username": "Hưng Thịnh"
-          },
-          "items": [
-            {
-              "food": "67e9245d7959b1f43adf7cd5",
-              "quantity": 2,
-              "price": 50000,
-              "toppings": [
-                {
-                  "topping": "681639d05a56620ec0753f7a",
-                  "item": [
-                    {
-                      "id": "67f2568e6b37cd0a94655e07",
-                      "price": 2200,
-                      "_id": "681efd2e50ac2b9eea6f13e1"
-                    }
-                  ],
-                  "_id": "681efd2e50ac2b9eea6f13e0"
-                }
-              ],
-              "_id": "681efd2e50ac2b9eea6f13df"
-            },
-            {
-              "food": "67ded2611dfb8dafb9200be4",
-              "quantity": 1,
-              "price": 50000,
-              "toppings": [
-                {
-                  "topping": "6819d35fd9108757680e6e88",
-                  "item": [
-                    {
-                      "id": "67f2568e6b37cd0a94655e07",
-                      "price": 2200,
-                      "_id": "681efd2e50ac2b9eea6f13e4"
-                    },
-                    {
-                      "id": "67f931be611cc9ec963e6933",
-                      "price": 2000,
-                      "_id": "681efd2e50ac2b9eea6f13e5"
-                    },
-                    {
-                      "id": "67f93203611cc9ec963e693e",
-                      "price": 1000,
-                      "_id": "681efd2e50ac2b9eea6f13e6"
-                    }
-                  ],
-                  "_id": "681efd2e50ac2b9eea6f13e3"
-                },
-                {
-                  "topping": "6819d35fd9108757680e6e89",
-                  "item": [
-                    {
-                      "id": "67f265978eb487399d88560b",
-                      "price": 10000,
-                      "_id": "681efd2e50ac2b9eea6f13e8"
-                    }
-                  ],
-                  "_id": "681efd2e50ac2b9eea6f13e7"
-                }
-              ],
-              "_id": "681efd2e50ac2b9eea6f13e2"
-            },
-            {
-              "food": "67eba7ffed2cdc702b33a907",
-              "quantity": 1,
-              "price": 20000,
-              "toppings": [
-                {
-                  "topping": "6819d4b9d9108757680e6f49",
-                  "item": [
-                    {
-                      "id": "67f93203611cc9ec963e693e",
-                      "price": 1000,
-                      "_id": "681efd2e50ac2b9eea6f13eb"
-                    },
-                    {
-                      "id": "67f931be611cc9ec963e6933",
-                      "price": 2000,
-                      "_id": "681efd2e50ac2b9eea6f13ec"
-                    }
-                  ],
-                  "_id": "681efd2e50ac2b9eea6f13ea"
-                }
-              ],
-              "_id": "681efd2e50ac2b9eea6f13e9"
+          const timeout = setTimeout(() => {
+            socket.off('order_response');
+            reject(new Error('Accept timeout'));
+          }, 10000);
+
+          socket.once('order_response', (response) => {
+            clearTimeout(timeout);
+            if (response.success) {
+              set({ currentOrder: response.orderDetails });
+              resolve(true);
+            } else {
+              reject(new Error(response.message));
             }
-          ],
-          "totalPrice": 199600,
-          "shippingFee": 12000,
-          "finalAmount": 199600,
-          "paymentMethod": "cash",
-          "paymentStatus": "pending",
-          "orderStatus": "delivering",
-          "createdAt": "2025-05-10T07:15:58.746Z",
-          "updatedAt": "2025-05-10T07:15:58.746Z",
-          "note": "nhớ mua thêm trứng",
-          "isRated": false,
-          "__v": 0,
-          "shipper": "65f7b1a4e01c6f2d542a7777"
-        }
-        try {
-          const result = await orderAPI.acceptOrder(orderId);
-
-          if (result.success && result.order) {
-            // Cập nhật danh sách đơn hàng với đơn hàng đã chấp nhận
-            const { orders, activeOrders } = get();
-            set({
-              orders: [...orders, orderData],
-              activeOrders: [...activeOrders, orderData],
-              pendingOrder: null,
-              isLoading: false
-            });
-          } else {
-            set({
-              isLoading: false,
-              error: result.message || 'Không thể chấp nhận đơn hàng'
-            });
-          }
-        } catch (error: any) {
-          console.error("Failed to accept order:", error);
-          set({
-            isLoading: false,
-            error: error.message || 'Đã xảy ra lỗi khi chấp nhận đơn hàng'
           });
-        }
+        });
       },
 
       declineOrder: async (orderId: string) => {
@@ -260,49 +220,59 @@ export const useOrderStore = create<OrderState>()(
       },
 
       updateOrderStatus: async (orderId: string, status: OrderStatus) => {
-        const { orders, activeOrders, completedOrders } = get();
-        set({ isLoading: true, error: null });
+        return new Promise((resolve, reject) => {
+          const currentOrder = get().currentOrder;
+          console.log('Current order state:', currentOrder);
 
-        try {
-          const result = await orderAPI.updateOrderStatus(orderId, status);
-
-          if (result.success && result.order) {
-            // Cập nhật đơn hàng trong state
-            const updatedOrder = result.order;
-            const updatedOrders = orders.map(order =>
-              order.id === orderId ? updatedOrder : order
-            );
-
-            // Cập nhật danh sách đơn hàng đang hoạt động và đã hoàn thành
-            let updatedActiveOrders = activeOrders.filter(order => order.id !== orderId);
-            let updatedCompletedOrders = [...completedOrders];
-
-            if (status === "delivered") {
-              updatedCompletedOrders.push(updatedOrder);
-            } else {
-              updatedActiveOrders.push(updatedOrder);
-            }
-
-            set({
-              orders: updatedOrders,
-              activeOrders: updatedActiveOrders,
-              completedOrders: updatedCompletedOrders,
-              isLoading: false
-            });
-
-          } else {
-            set({
-              isLoading: false,
-              error: result.message || 'Không thể cập nhật trạng thái đơn hàng'
-            });
+          if (!currentOrder) {
+            console.log('❌ Update failed: No current order');
+            reject(new Error('No current order'));
+            return;
           }
-        } catch (error: any) {
-          console.error("Failed to update status:", error);
-          set({
-            isLoading: false,
-            error: error.message || 'Đã xảy ra lỗi khi cập nhật trạng thái đơn hàng'
+
+          const shipperId = currentOrder.shipper;
+          if (!shipperId) {
+            console.log('❌ Update failed: No shipper assigned');
+            reject(new Error('No shipper assigned'));
+            return;
+          }
+
+          console.log('📤 Emitting order_status_update:', { orderId, status, shipperId });
+          // Emit socket event to update order status
+          socket.emit('order_status_update', { orderId, status, shipperId });
+
+          // Listen for response
+          const timeout = setTimeout(() => {
+            console.log('⏰ Update timeout');
+            socket.off('status_update_response');
+            reject(new Error('Update timeout'));
+          }, 10000);
+
+          socket.once('status_update_response', (response) => {
+            clearTimeout(timeout);
+            if (response.success) {
+              console.log('✅ Status update successful:', { orderId, status });
+              const updatedOrder = response.orderDetails;
+              set((state) => ({
+                ...state,
+                currentOrder: updatedOrder,
+                orders: state.orders.map(order => 
+                  order._id === orderId ? updatedOrder : order
+                ),
+                activeOrders: state.activeOrders.map(order => 
+                  order._id === orderId ? updatedOrder : order
+                ),
+                completedOrders: state.completedOrders.map(order => 
+                  order._id === orderId ? updatedOrder : order
+                )
+              }));
+              resolve();
+            } else {
+              console.log('❌ Status update failed:', response.message);
+              reject(new Error(response.message));
+            }
           });
-        }
+        });
       },
 
       generateNewOrderRequest: () => {
@@ -314,6 +284,11 @@ export const useOrderStore = create<OrderState>()(
 
       clearPendingOrder: () => {
         set({ pendingOrder: null });
+      },
+
+      setCurrentOrder: (order) => {
+        console.log('Setting current order:', order);
+        set({ currentOrder: order });
       }
     }),
     {
