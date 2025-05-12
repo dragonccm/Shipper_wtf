@@ -93,7 +93,7 @@ export default function RegisterScreen() {
       const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
 
       // Register API call
-      const registerRes = await fetch("https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/register_phone", {
+      const registerRes = await fetch("https://3db2-2001-ee0-5367-99e0-ddc9-187c-7f45-7d6a.ngrok-free.app/api/register_phone", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +122,7 @@ export default function RegisterScreen() {
 
       if (registerData.EC === "0") {
         // Auto login after successful registration
-        const loginRes = await fetch("https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app", {
+        const loginRes = await fetch("https://3db2-2001-ee0-5367-99e0-ddc9-187c-7f45-7d6a.ngrok-free.app", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

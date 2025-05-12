@@ -111,7 +111,7 @@ export default function OrderDetailScreen() {
         }
 
         // Luôn fetch mới để đảm bảo dữ liệu cập nhật
-        const response = await fetch(`https://f3f8-2a09-bac5-d44d-2646-00-3d0-64.ngrok-free.app/api/getorder/${id}`, {
+        const response = await fetch(`https://3db2-2001-ee0-5367-99e0-ddc9-187c-7f45-7d6a.ngrok-free.app/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
