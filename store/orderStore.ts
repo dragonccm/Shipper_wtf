@@ -110,7 +110,7 @@ export const useOrderStore = create<OrderState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const response = await fetch(`https://3db2-2001-ee0-5367-99e0-ddc9-187c-7f45-7d6a.ngrok-free.app/api/shipper/orders/${shipperId}`, {
+          const response = await fetch(`https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api/shipper/orders/${shipperId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'

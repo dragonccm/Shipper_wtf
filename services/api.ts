@@ -3,7 +3,7 @@ import { User, Order } from "@/types";
 
 // Cấu hình API
 // Sử dụng localhost hoặc 10.0.2.2 cho máy ảo Android
-const API_URL = "https://3db2-2001-ee0-5367-99e0-ddc9-187c-7f45-7d6a.ngrok-free.app/api";
+const API_URL = "https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api";
 
 // Tạm thời sử dụng dữ liệu mẫu thay vì gọi API thật
 // const USE_MOCK_DATA = true;
