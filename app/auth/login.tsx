@@ -1,41 +1,44 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TextInput, 
+  TouchableOpacity, 
   Image,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
-import { useAuthStore } from '@/store/useAuthStore';
-import { colors } from '@/constants/colors';
+import { useAuthStore } from '@/store/authStore';
+import {colors} from '@/constants/colors';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, setAuthenticated, setUser, setToken } = useAuthStore();
-
+  const { requestOtp, isAuthenticated, login, passwords } = useAuthStore();
+  
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [loginMode, setLoginMode] = useState(true); // true = password login, false = OTP login
+  
   // Redirect if already authenticated
-  // React.useEffect(() => {
-  //   if (isAuthenticated) {
-  //     router.replace('/');
-  //   }
-  // }, [isAuthenticated]);
-
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated]);
+  
   const formatPhoneNumber = (text: string) => {
     // Remove non-numeric characters
     const cleaned = text.replace(/\D/g, '');
-
+    
     // Format as Vietnamese phone number
     let formatted = cleaned;
     if (cleaned.length > 0) {
@@ -47,67 +50,124 @@ export default function LoginScreen() {
         formatted = `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 10)}`;
       }
     }
-
+    
     setPhoneNumber(formatted);
   };
-
+  
   const validatePhoneNumber = (number: string) => {
     const cleanedNumber = number.replace(/\s/g, '');
     return cleanedNumber.length >= 9 && cleanedNumber.length <= 10;
   };
-
+  
+  const formatFullPhoneNumber = (number: string) => {
+    const cleanedNumber = number.replace(/\s/g, '');
+    
+    let fullPhoneNumber = cleanedNumber;
+    if (!cleanedNumber.startsWith('+84') && !cleanedNumber.startsWith('84')) {
+      if (cleanedNumber.startsWith('0')) {
+        fullPhoneNumber = `+84${cleanedNumber.substring(1)}`;
+      } else {
+        fullPhoneNumber = `+84${cleanedNumber}`;
+      }
+    } else if (cleanedNumber.startsWith('84')) {
+      fullPhoneNumber = `+${cleanedNumber}`;
+    }
+    
+    return fullPhoneNumber;
+  };
+  
   const handlePasswordLogin = async () => {
     if (!validatePhoneNumber(phoneNumber)) {
       setError('Please enter a valid phone number');
       return;
     }
-
+    
     if (!password) {
       setError('Please enter your password');
       return;
     }
-
+    
+    setIsLoading(true);
     setError(null);
-
+    
     try {
-      // Normalize phone number by removing spaces and non-numeric characters
-      const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
-
-      // Login API call
-      const loginRes = await fetch("https://dark-rabbits-enjoy.loca.lt/api/login_phone", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          valueLogin: normalizedPhone,
-          password,
-        }),
-      });
-
-      const loginData = await loginRes.json();
-      if (loginData.EC === "0" && loginData.DT) {
-        await setToken(loginData.DT.access_token);
-        console.log("loginData.DT.account=============",loginData.DT);
-        setUser(loginData.DT.account);
-        setAuthenticated(true);
+      function normalizePhoneNumber(phoneNumber: string): string {
+        // Bỏ dấu +
+        let cleaned = phoneNumber.replace(/^\+/, '');
+      
+        // Nếu bắt đầu bằng 84 thì thay bằng 0
+        if (cleaned.startsWith('84')) {
+          cleaned = '0' + cleaned.slice(2);
+        }
+      
+        return cleaned;
+      }
+      
+      const fullPhoneNumber = formatFullPhoneNumber(phoneNumber);
+      const success = await login(normalizePhoneNumber(fullPhoneNumber), password);
+      console.log('Login success:', success);
+      
+      if (success) {
         router.replace('/');
       } else {
-        setError(loginData.EM || 'Invalid phone number or password');
+        setError('Invalid phone number or password');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error: roi con', error);
       setError('An error occurred during login. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
-
+  
+  const handleOtpLogin = async () => {
+    if (!validatePhoneNumber(phoneNumber)) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const fullPhoneNumber = formatFullPhoneNumber(phoneNumber);
+      await requestOtp(fullPhoneNumber);
+      
+      // Navigate to OTP verification screen
+      router.push('/auth/verify');
+    } catch (error) {
+      console.error('Error requesting OTP:', error);
+      setError('Failed to send verification code. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const toggleLoginMode = () => {
+    setLoginMode(!loginMode);
+    setError(null);
+  };
+  
+  const handleContinue = () => {
+    if (loginMode) {
+      handlePasswordLogin();
+    } else {
+      handleOtpLogin();
+    }
+  };
+  
+  const isPhoneRegistered = () => {
+    const fullPhoneNumber = formatFullPhoneNumber(phoneNumber);
+    return !!passwords[fullPhoneNumber];
+  };
+  
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen
         options={{
           title: "Login",
           headerLeft: () => (
-            <TouchableOpacity
+            <TouchableOpacity 
               style={styles.backButton}
               onPress={() => router.back()}
             >
@@ -116,83 +176,97 @@ export default function LoginScreen() {
           ),
         }}
       />
-
-      <KeyboardAvoidingView
+      
+      <KeyboardAvoidingView 
         style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         <View style={styles.logoContainer}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Zm9vZHxlbnwwfHwwfHx8MA%3D%3D' }}
+          <Image 
+            source={{ uri: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Zm9vZHxlbnwwfHwwfHx8MA%3D%3D' }} 
             style={styles.logo}
           />
         </View>
-
-        <Text style={styles.title}>Login</Text>
+        
+        <Text style={styles.title}>Login or Sign Up</Text>
         <Text style={styles.subtitle}>
-          Enter your phone number and password to login.
+          {loginMode 
+            ? "Enter your phone number and password to login." 
+            : "Enter your phone number to continue. We'll send you a verification code."}
         </Text>
-
+        
         <View style={styles.inputContainer}>
           <View style={styles.phoneInputContainer}>
-            <Phone size={20} color={colors.subtext} style={styles.inputIcon} />
+            <Phone size={20} color={colors.lightText} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Phone Number"
-              placeholderTextColor={colors.subtext}
+              placeholderTextColor={colors.placeholder}
               keyboardType="phone-pad"
               value={phoneNumber}
               onChangeText={formatPhoneNumber}
-              maxLength={13}
+              maxLength={13} // +84 xxx xxx xxx format with spaces
             />
           </View>
-
-          <View style={styles.passwordInputContainer}>
-            <Lock size={20} color={colors.subtext} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.subtext}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? (
-                <EyeOff size={20} color={colors.subtext} />
-              ) : (
-                <Eye size={20} color={colors.subtext} />
-              )}
-            </TouchableOpacity>
-          </View>
-
+          
+          {loginMode && (
+            <View style={styles.passwordInputContainer}>
+              <Lock size={20} color={colors.lightText} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor={colors.placeholder}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color={colors.lightText} />
+                ) : (
+                  <Eye size={20} color={colors.lightText} />
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+          
           {error && (
             <Text style={styles.errorText}>{error}</Text>
           )}
-
-          <TouchableOpacity
+          
+          <TouchableOpacity 
             style={[
               styles.continueButton,
-              (!phoneNumber || !password || authLoading) && styles.disabledButton
+              (!phoneNumber || (loginMode && !password) || isLoading) && styles.disabledButton
             ]}
-            onPress={handlePasswordLogin}
-            disabled={!phoneNumber || !password || authLoading}
+            onPress={handleContinue}
+            disabled={!phoneNumber || (loginMode && !password) || isLoading}
           >
-            {authLoading ? (
+            {isLoading ? (
               <ActivityIndicator color={colors.background} size="small" />
             ) : (
               <Text style={styles.continueButtonText}>
-                Login
+                {loginMode ? "Login" : "Continue with OTP"}
               </Text>
             )}
           </TouchableOpacity>
-
+          
+          <TouchableOpacity 
+            style={styles.switchModeButton}
+            onPress={toggleLoginMode}
+          >
+            <Text style={styles.switchModeText}>
+              {loginMode 
+                ? "Don't remember password? Login with OTP" 
+                : "Already have an account? Login with password"}
+            </Text>
+          </TouchableOpacity>
         </View>
-
+        
         <Text style={styles.termsText}>
           By continuing, you agree to our Terms of Service and Privacy Policy.
         </Text>
@@ -230,7 +304,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: colors.subtext,
+    color: colors.lightText,
     marginBottom: 30,
     lineHeight: 22,
   },
@@ -281,26 +355,26 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   disabledButton: {
-    backgroundColor: colors.subtext,
+    backgroundColor: colors.lightText,
   },
   continueButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: colors.background,
   },
-  termsText: {
-    fontSize: 12,
-    color: colors.subtext,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  registerButton: {
-    paddingVertical: 8,
+  switchModeButton: {
     alignItems: 'center',
+    paddingVertical: 8,
   },
-  registerButtonText: {
+  switchModeText: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: '500',
+    textAlign: 'center',
+  },
+  termsText: {
+    fontSize: 12,
+    color: colors.lightText,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

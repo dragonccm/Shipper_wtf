@@ -1,24 +1,36 @@
 import { create } from "zustand";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { User, Location } from "../types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Location } from "../types";
 import {
   saveAccessToken,
   getAccessToken,
   removeAccessToken,
 } from "../storange/auth.storage";
-import { API_URL } from "@/constants/config";
+import AuthenApiRequest from "@/api/authen.api";
 
-// In ra console toàn bộ request và response
-const logRequestResponse = async (request: string, response: any) => {
-  console.log("Request:", request);
-  console.log("Response:", response);
-};
+
+export interface User {
+  id: string;
+  phoneNumber?: string;
+  phone?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+  avatar?: string;
+  avt?: string;
+  role?: string;
+  createdAt?: Date;
+}
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isVerifying: boolean;
+  isNewUser: boolean;
+  verificationId: string | null;
+  phoneNumber: string | null;
   token?: string | null;
 
   // Auth actions
@@ -28,9 +40,21 @@ interface AuthState {
   checkAuth: () => Promise<boolean>;
   setUser: (user: User) => void;
 
+  // OTP actions
+  setPhoneNumber: (phoneNumber: string) => void;
+  setVerificationId: (verificationId: string) => void;
+  setVerifying: (isVerifying: boolean) => void;
+  setIsNewUser: (isNewUser: boolean) => void;
+  requestOtp: (phoneNumber: string) => Promise<string>;
+  verifyOtp: (otp: string) => Promise<boolean>;
+  createPassword: (password: string) => Promise<boolean>;
+
   // User actions
   updateUserLocation: (location: Location) => void;
   toggleOnlineStatus: () => void;
+  updateUserProfile: (userData: Partial<User>) => void;
+
+  passwords: Record<string, string>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -39,7 +63,12 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      isVerifying: false,
+      isNewUser: false,
+      verificationId: null,
+      phoneNumber: null,
       token: null,
+      passwords: {},
 
       setUser: (user: User) => {
         set({
@@ -48,13 +77,13 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false,
         });
       },
-
+      // Mock OTP request (in a real app, this would call a backend API)
       checkAuth: async () => {
         set({ isLoading: true });
         try {
           const token = await getAccessToken();
           if (token) {
-            const res = await fetch("https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app/api/check-auth", {
+            const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/check-auth", {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -91,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting login with:", { phoneNumber });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app", {
+          const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/login_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -102,7 +131,14 @@ export const useAuthStore = create<AuthState>()(
             }),
           });
 
-          const data = await res.json();
+          let data;
+          try {
+            data = await res.json();
+          } catch (parseError) {
+            console.error("JSON parse error:", parseError);
+            set({ isLoading: false });
+            return false;
+          }
           console.log("Login response:", data);
 
           if (data.EC === "0" && data.DT) {
@@ -129,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting register with:", { phoneNumber, name });
         set({ isLoading: true });
         try {
-          const res = await fetch("  https://a18a-2a09-bac5-d44a-16dc-00-247-4a.ngrok-free.app/api/register_phone", {
+          const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/register_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -215,6 +251,100 @@ export const useAuthStore = create<AuthState>()(
             ? { ...state.user, isOnline: !state.user.isOnline }
             : null,
         }));
+      },
+
+      setPhoneNumber: (phoneNumber) => set({ phoneNumber }),
+
+      setVerificationId: (verificationId) => set({ verificationId }),
+
+      setVerifying: (isVerifying) => set({ isVerifying }),
+
+      setIsNewUser: (isNewUser) => set({ isNewUser }),
+
+      requestOtp: async (phoneNumber) => {
+        try {
+          const data = await AuthenApiRequest.send(phoneNumber);
+          console.log("OTP request data:", data.payload);
+
+          set({
+            phoneNumber,
+            isVerifying: data.payload.DT,
+            isNewUser: !get().user,
+          });
+
+          return data.payload;
+        } catch (error) {
+          console.error("OTP request error:", error);
+          throw error;
+        }
+      },
+
+      verifyOtp: async (otp) => {
+        const { phoneNumber } = get();
+        if (!phoneNumber) return false;
+
+        try {
+          const data = await AuthenApiRequest.verify(phoneNumber, otp);
+          console.log("OTP verification data:", data.payload);
+
+          set({
+            isVerifying: true,
+            isNewUser: true,
+          });
+
+          return data.payload.EC === "0";
+        } catch (error) {
+          console.error("OTP verification error:", error);
+          return false;
+        }
+      },
+
+      createPassword: async (password) => {
+        const { phoneNumber } = get();
+        if (!phoneNumber) return false;
+
+        function normalizePhoneNumber(phoneNumber: string): string {
+          let cleaned = phoneNumber.replace(/^\+/, "");
+          if (cleaned.startsWith("84")) {
+            cleaned = "0" + cleaned.slice(2);
+          }
+          return cleaned;
+        }
+
+        try {
+          const normalizedPhone = normalizePhoneNumber(phoneNumber);
+          const registerData = await AuthenApiRequest.register(normalizedPhone, password);
+
+          if (registerData.payload.EC !== "0") return false;
+
+          const loginData = await AuthenApiRequest.login(normalizedPhone, password);
+          if (loginData.payload.EC !== "0" || !loginData.payload.DT.access_token) return false;
+
+          set({
+            user: loginData.payload.DT.account,
+            isAuthenticated: true,
+            isVerifying: false,
+            verificationId: null,
+          });
+
+          await saveAccessToken(loginData.payload.DT.access_token);
+          return true;
+        } catch (error) {
+          console.error("Create password error:", error);
+          return false;
+        }
+      },
+
+      updateUserProfile: (userData) => {
+        const { user } = get();
+        if (user) {
+          set({
+            user: {
+              ...user,
+              ...userData,
+            },
+          });
+        }
       },
     }),
     {

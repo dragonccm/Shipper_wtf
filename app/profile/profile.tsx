@@ -30,8 +30,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     fetchWalletBalance();
-    fetchShipperOrders();
-    
+    fetchShipperOrders()
     // Lắng nghe cập nhật số dư từ socket
     const handleWalletUpdate = (data: WalletData) => {
       if (data.shipperId === user?.shipperId) {

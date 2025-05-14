@@ -13,7 +13,7 @@ import {
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Lock, Eye, EyeOff } from 'lucide-react-native';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/store/authStore';
 import{ colors } from '@/constants/colors';
 
 export default function VerifyOtpScreen() {
