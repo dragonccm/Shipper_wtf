@@ -110,7 +110,7 @@ export const useOrderStore = create<OrderState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const response = await fetch(`https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api/shipper/orders/${shipperId}`, {
+          const response = await fetch(`https://dark-rabbits-enjoy.loca.lt/api/shipper/orders/${shipperId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'

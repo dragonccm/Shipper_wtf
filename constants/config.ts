@@ -1,1 +1,1 @@
-export const API_URL = 'https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app'; // Thay đổi URL này theo backend của bạn 
+export const API_URL = 'https://dark-rabbits-enjoy.loca.lt'; // Thay đổi URL này theo backend của bạn 

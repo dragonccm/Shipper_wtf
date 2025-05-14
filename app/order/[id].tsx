@@ -111,7 +111,7 @@ export default function OrderDetailScreen() {
         }
 
         // Luôn fetch mới để đảm bảo dữ liệu cập nhật
-        const response = await fetch(`https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api/getorder/${id}`, {
+        const response = await fetch(`https://dark-rabbits-enjoy.loca.lt/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
@@ -119,7 +119,7 @@ export default function OrderDetailScreen() {
         });
         if (!response.ok) throw new Error('Failed to fetch order');
         const data = await response.json();
-
+        console.log("SERVER trả về đơn hàng:fsdfsdfdsfs", JSON.stringify(data, null, 2));
         if (data.EC === "0" && data.DT) {
           const orderData: Order = {
             ...data.DT,

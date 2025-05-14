@@ -1,0 +1,269 @@
+\documentclass{report}
+% Can dùng book, article... tuỳ yêu cầu
+\usepackage[utf8]{inputenc}      % mã hoá VN nếu cần
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+
+\usepackage{float}               % để dùng [H]
+\usepackage{graphicx}            % \includegraphics
+\usepackage[export]{adjustbox}   % mở rộng các key của \includegraphics
+
+% --- Thiết lập mặc định cho mọi hình ---
+\setkeys{Gin}{%
+  max width=\textwidth,           % không vượt quá chiều rộng text
+  max height=0.8\textheight,      % không cao quá 80% chiều cao trang
+  keepaspectratio                 % giữ tỉ lệ gốc
+}
+% --------------------------------------------------
+
+\begin{document}
+
+\chapter{XÂY DỰNG HỆ THỐNG}
+\section{Giao diện chung}
+\subsection{Trang người dùng}
+
+\subsubsection{Trang chủ (Web)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/Home_web.png}
+  \caption{Trang chủ (Web)}
+\end{figure}
+
+\subsubsection{Trang Nhà hàng (Web)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/restaurant-web.png}
+  \caption{Trang tìm kiếm nhà hàng}
+\end{figure}
+
+\subsubsection{Trang Chi Tiết Món (Web)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/food_web.png}
+  \caption{Trang chi tiết món ăn}
+\end{figure}
+
+\subsubsection{Trang đăng nhập}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/login_web.png}
+  \caption{Trang đăng nhập}
+\end{figure}
+
+\subsubsection{Trang thông tin tài khoản}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/profile_web.png}
+  \caption{Trang thông tin tài khoản}
+\end{figure}
+
+\subsubsection{Trang đăng ký}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/register_web.png}
+  \caption{Trang đăng ký}
+\end{figure}
+
+\subsubsection{Trang đăng ký nhà hàng}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/shop_register_1.png}
+  \caption{Trang đăng ký nhà hàng (bước 1)}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/shop_register_2.png}
+  \caption{Trang đăng ký nhà hàng (bước 2)}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/shop_register_3.png}
+  \caption{Trang đăng ký nhà hàng (bước 3)}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/shop_register_4.png}
+  \caption{Trang đăng ký nhà hàng (bước 4)}
+\end{figure}
+
+\subsubsection{Trang Đăng Ký Làm Tài Xế Giao Hàng}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/shipper_register.png}
+  \caption{Trang đăng ký làm tài xế}
+\end{figure}
+
+\subsubsection{Trang chủ Quản trị}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_home.png}
+  \caption{Trang chủ quản trị}
+\end{figure}
+
+\subsubsection{Trang thông tin Shipper}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_shipper.png}
+  \caption{Trang quản lý Shipper}
+\end{figure}
+
+\subsubsection{Trang thông tin tài khoản quản trị}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_home.png}
+  \caption{Trang thông tin tài khoản quản trị}
+\end{figure}
+
+\subsubsection{Trang thông tin thể loại}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admi_cate.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_create_cate.png}
+  \caption{Trang tạo thể loại mới}
+\end{figure}
+
+\subsubsection{Trang phê duyệt yêu cầu}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_approve.png}
+  \caption{Trang phê duyệt yêu cầu}
+\end{figure}
+
+\subsubsection{Trang thông tin khuyến mãi}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_create_voucher.png}
+  \caption{Trang thông tin khuyến mãi}
+\end{figure}
+
+\subsubsection{Trang thông tin nhà hàng}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin_restaurant.png}
+  \caption{Trang thông tin nhà hàng}
+\end{figure}
+
+\caption{Trang chủ nhà hàng}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/admin}
+  \caption{Trang phê duyệt yêu cầu}
+\end{figure}
+
+\subsubsection{Trang Nhóm món ăn}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_gr_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_gr_res1.png}
+  \caption{Trang tạo thể loại mới}
+\end{figure}
+
+\subsubsection{Trang món ăn}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_food_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_food_res1.png}
+  \caption{Trang tạo thể loại mới}
+\end{figure}
+
+\subsubsection{Trang món ăn kèm}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_topping_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/menu_topping_res1.png}
+  \caption{Trang tạo thể loại mới}
+\end{figure}
+
+\subsubsection{Trang Đơn hàng}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/home_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+
+\subsubsection{Trang thông tin nhân viên}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/staff_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+\subsubsection{Trang thống kê}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/statistical_res.png}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+\subsubsection{Trang chủ shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/Home_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+\subsubsection{Trang đơn hàng shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/donhang_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+\subsubsection{Trang lịch sử đơn hàng shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/e0cb5b76033fb661ef2e4.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\subsubsection{Trang profile shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/profile_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\subsubsection{Trang ví tài xế shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/vi_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\subsubsection{Trang lịch sử giao dịch shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/giaodich_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/nganhang_shipper.jpg}
+  \caption{Trang tạo thể loại mới}
+\end{figure}
+
+
+\subsubsection{Thông báo đơn hàng shipper(mobile)}
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.13]{img/chuong4/thongbao_shipper.jpg}
+  \caption{Trang quản lý thể loại}
+\end{figure}
+
+
+
+\end{document}

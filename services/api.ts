@@ -3,7 +3,7 @@ import { User, Order } from "@/types";
 
 // Cấu hình API
 // Sử dụng localhost hoặc 10.0.2.2 cho máy ảo Android
-const API_URL = "https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api";
+const API_URL = "https://dark-rabbits-enjoy.loca.lt/api";
 
 // Tạm thời sử dụng dữ liệu mẫu thay vì gọi API thật
 // const USE_MOCK_DATA = true;

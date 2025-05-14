@@ -53,10 +53,10 @@ export default function OrdersScreen(): JSX.Element {
   const fetchActiveOrders = async () => {
     try {
       if (!user?.shipperId) return;
-      
+
       const response = await fetch(`${API_URL}/api/shipper/orders/${user.shipperId}`);
       const data = await response.json();
-      
+
       if (data.EC === "0" && data.DT) {
         // Lọc ra các đơn hàng chưa được giao (không có trạng thái 'delivered')
         const activeOrders = data.DT.activeOrders.filter(
@@ -217,7 +217,7 @@ export default function OrdersScreen(): JSX.Element {
     }
     socket.emit('assign_order', '681f06bf71a1380d27f81ecd');
   };
-  
+
   const renderLocationStatus = () => {
     if (locationError) {
       return (
@@ -261,7 +261,6 @@ export default function OrdersScreen(): JSX.Element {
           router.push(`/order/${item._id}`);
         }}
       >
-        <Button title="Gửi vị trí" onPress={sendLocation} />
 
         <View style={styles.orderHeader}>
           <View style={styles.statusIndicator}>
@@ -310,9 +309,7 @@ export default function OrdersScreen(): JSX.Element {
               <Text style={styles.detailText}>{item.address?.phoneNumber}</Text>
             </View>
             <View style={styles.actionButtons}>
-              <TouchableOpacity style={[styles.actionButton, styles.messageButton]}>
-                <Text style={styles.actionButtonText}>Nhắn tin</Text>
-              </TouchableOpacity>
+
               <TouchableOpacity style={[styles.actionButton, styles.navigateButton]}>
                 <Text style={styles.navigateButtonText}>Điều hướng</Text>
               </TouchableOpacity>
@@ -323,11 +320,16 @@ export default function OrdersScreen(): JSX.Element {
         <View style={styles.expandRow}>
           <Text style={styles.expandText}>{expanded ? 'Ẩn chi tiết' : 'Xem chi tiết'}</Text>
           <ChevronRight
+
             size={16}
             color={colors.subtext}
             style={expanded ? styles.rotatedIcon : undefined}
           />
         </View>
+        <View style={{ opacity: 1 }}>
+          <Button title="Kiểm tra" onPress={sendLocation} />
+        </View>
+
       </TouchableOpacity>
     );
   };
@@ -335,7 +337,7 @@ export default function OrdersScreen(): JSX.Element {
   const showStatusChangeModal = (message: string) => {
     setStatusMessage(message);
     setShowStatusModal(true);
-    
+
     // Reset animations
     modalScale.setValue(0);
     modalOpacity.setValue(0);
@@ -448,7 +450,7 @@ export default function OrdersScreen(): JSX.Element {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.pageTitle}>Đơn hàng đang giao</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.reloadButton}
           onPress={onRefresh}
         >
@@ -457,7 +459,7 @@ export default function OrdersScreen(): JSX.Element {
       </View>
 
       {renderLocationStatus()}
-      
+
       {orders.length > 0 ? (
         <FlatList
           data={orders}
@@ -480,7 +482,7 @@ export default function OrdersScreen(): JSX.Element {
           <Text style={styles.emptyDescription}>
             Khi bạn nhận đơn hàng mới, chúng sẽ xuất hiện ở đây.
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.reloadButtonLarge}
             onPress={onRefresh}
           >
@@ -497,10 +499,10 @@ export default function OrdersScreen(): JSX.Element {
         onRequestClose={() => setShowStatusModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.modalContent,
-              { 
+              {
                 transform: [
                   { scale: modalScale },
                   { translateY: modalTranslateY }
@@ -535,17 +537,17 @@ export default function OrdersScreen(): JSX.Element {
             </Text>
             <Text style={styles.modalText}>{statusMessage}</Text>
             <View style={styles.modalProgressBar}>
-              <Animated.View 
+              <Animated.View
                 style={[
                   styles.progressFill,
-                  { 
+                  {
                     backgroundColor: isOnline ? colors.primary : colors.error,
                     width: modalScale.interpolate({
                       inputRange: [0, 1],
                       outputRange: ['0%', '100%']
                     })
                   }
-                ]} 
+                ]}
               />
             </View>
           </Animated.View>

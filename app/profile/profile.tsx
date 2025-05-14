@@ -105,7 +105,7 @@ export default function ProfileScreen() {
     logout();
     router.replace('/');
   };
-
+// alert(JSON.stringify(user));
   if (!user) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
           <Text style={styles.subtitle}>Bạn cần đăng nhập để xem thông tin</Text>
           
           <Button 
-            title="Đăng nhập / Đăng ký" 
+            title="Đăng nhập" 
             onPress={handleLoginPress}
             style={styles.button}
           />

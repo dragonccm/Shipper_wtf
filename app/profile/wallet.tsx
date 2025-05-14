@@ -86,7 +86,7 @@ export default function WalletScreen() {
     const fetchWalletBalance = async () => {
       try {
         if (user?.shipperId) {
-          const response = await fetch(`https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api/wallet/balance/${user.shipperId}`);
+          const response = await fetch(`https://dark-rabbits-enjoy.loca.lt/api/wallet/balance/${user.shipperId}`);
           const data = await response.json();
           
           if (data.EC === "0" && data.DT) {

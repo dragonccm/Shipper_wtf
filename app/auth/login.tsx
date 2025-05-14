@@ -74,7 +74,7 @@ export default function LoginScreen() {
       const normalizedPhone = phoneNumber.replace(/\s/g, '').replace(/\D/g, '');
 
       // Login API call
-      const loginRes = await fetch("https://3aaa-2a09-bac1-7a80-8-00-279-83.ngrok-free.app/api/login_phone", {
+      const loginRes = await fetch("https://dark-rabbits-enjoy.loca.lt/api/login_phone", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,11 +86,9 @@ export default function LoginScreen() {
       });
 
       const loginData = await loginRes.json();
-      console.log("Login response:", loginData);
-
       if (loginData.EC === "0" && loginData.DT) {
         await setToken(loginData.DT.access_token);
-        console.log("loginData.DT.account",loginData.DT.account);
+        console.log("loginData.DT.account=============",loginData.DT);
         setUser(loginData.DT.account);
         setAuthenticated(true);
         router.replace('/');
