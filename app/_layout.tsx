@@ -60,11 +60,13 @@ export default function RootLayout() {
     if (!user?.shipperId) return;
 
     const handleNewOrder = (data: { orderId: string; orderDetails: any }) => {
-      setNewOrder({
-        _id: data.orderId,
-        ...data.orderDetails
-      });
-      setShowNewOrderPopup(true);
+      // if(isOnline){
+        setNewOrder({
+          _id: data.orderId,
+          ...data.orderDetails
+        });
+        setShowNewOrderPopup(true);
+      // }
     };
 
     socket.on('new_order_assigned', handleNewOrder);
@@ -73,9 +75,6 @@ export default function RootLayout() {
       socket.off('new_order_assigned', handleNewOrder);
     };
   }, [user?.shipperId]);
-  socket.on('new_order_assigned', (data) => {
-    alert('Có đơn hàng mới!');
-  });
 
   // Lắng nghe trạng thái online từ server (nếu có)
   useEffect(() => {
@@ -144,7 +143,7 @@ export default function RootLayout() {
                 shipperId: user?.shipperId,
               });
               setShowNewOrderPopup(false);
-              router.push(`/order/${newOrder._id}`);
+              // router.push(`/order/${newOrder._id}`);
             }}
             onDecline={() => {
               setShowNewOrderPopup(false);

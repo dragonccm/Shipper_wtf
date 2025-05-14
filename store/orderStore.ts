@@ -110,7 +110,7 @@ export const useOrderStore = create<OrderState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const response = await fetch(`https://smooth-taxis-rest.loca.lt/api/shipper/orders/${shipperId}`, {
+          const response = await fetch(`https://wise-apes-wear.loca.lt/api/shipper/orders/${shipperId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'

@@ -86,7 +86,7 @@ export default function WalletScreen() {
     const fetchWalletBalance = async () => {
       try {
         if (user?.shipperId) {
-          const response = await fetch(`https://smooth-taxis-rest.loca.lt/api/wallet/balance/${user.shipperId}`);
+          const response = await fetch(`https://wise-apes-wear.loca.lt/api/wallet/balance/${user.shipperId}`);
           const data = await response.json();
           
           if (data.EC === "0" && data.DT) {

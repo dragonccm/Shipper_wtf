@@ -32,7 +32,7 @@ export default function TabLayout() {
     const handleNewOrder = (data: { orderId: string; orderDetails: Order }) => {
       console.log('📦 Nhận đơn hàng mới:', data);
       setCurrentOrder(data.orderDetails);
-      router.push(`/order/${data.orderId}`);
+      // router.push(`/order/${data.orderId}`);
     };
 
     // Đăng ký event listener
@@ -43,9 +43,6 @@ export default function TabLayout() {
       socket.off('new_order_assigned', handleNewOrder);
     };
   }, [isAuthenticated]);
-  socket.on('new_order_assigned', (data) => {
-    alert('Có đơn hàng mới!');
-  });
   useEffect(() => {
     // Chỉ tải dữ liệu khi đã xác thực
     if (isAuthenticated) {

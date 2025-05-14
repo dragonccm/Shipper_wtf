@@ -59,7 +59,6 @@ export default function OrderDetailScreen() {
     if (!socket) return;
 
     const handleResponse = (response: any) => {
-      console.log('CLIENT nhận phản hồi trạng thái:', JSON.stringify(response, null, 2));
       if (
         response &&
         response.success &&
@@ -82,7 +81,6 @@ export default function OrderDetailScreen() {
             status: response.orderDetails.orderStatus
           }));
         }
-        Alert.alert('Thành công', 'Cập nhật trạng thái đơn hàng thành công');
       } else {
         setIsUpdating(false);
         setPendingUpdate(null);
@@ -115,7 +113,7 @@ export default function OrderDetailScreen() {
         }
 
         // Luôn fetch mới để đảm bảo dữ liệu cập nhật
-        const response = await fetch(`https://smooth-taxis-rest.loca.lt/api/getorder/${id}`, {
+        const response = await fetch(`https://wise-apes-wear.loca.lt/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
@@ -123,27 +121,37 @@ export default function OrderDetailScreen() {
         });
         if (!response.ok) throw new Error('Failed to fetch order');
         const data = await response.json();
-        console.log("SERVER trả về đơn hàng:fsdfsdfdsfs", JSON.stringify(data, null, 2));
+        
         if (data.EC === "0" && data.DT) {
+          // Xử lý dữ liệu nhà hàng
+          const restaurantData = data.DT.restaurant || data.DT.items[0]?.food?.restaurant || {};
+          const restaurantLocation = restaurantData.address?.location?.coordinates || 
+                                    restaurantData.location?.coordinates || 
+                                    [0, 0];
+          
           const orderData: Order = {
             ...data.DT,
             user: data.DT.user,
-            customer: data.DT.customer,
+            customer: {
+              name: data.DT.address?.name || '',
+              phone: data.DT.address?.phoneNumber || '',
+              address: data.DT.address?.address || ''
+            },
             restaurant: {
-              ...data.DT.items[0]?.food?.restaurant,
+              _id: restaurantData._id || '',
+              name: restaurantData.name || 'Không xác định',
+              phone: restaurantData.phone || '',
               location: {
-                latitude: data.DT.items[0]?.food?.restaurant?.location?.coordinates[1] || 0,
-                longitude: data.DT.items[0]?.food?.restaurant?.location?.coordinates[0] || 0
-              }
+                latitude: restaurantLocation[1] || 0,
+                longitude: restaurantLocation[0] || 0
+              },
+              address: restaurantData.address?.fullAddress || ''
             },
             items: data.DT.items.map((item: any) => ({
-              ...item,
-              food: {
-                _id: item.food?._id,
-                name: item.food?.name,
-                price: item.food?.price,
-                restaurant: item.food?.restaurant
-              },
+              _id: item._id,
+              name: item.food?.name || 'Không xác định',
+              quantity: item.quantity,
+              price: item.price,
               toppings: item.toppings?.map((topping: any) => ({
                 ...topping,
                 item: topping.item
@@ -151,24 +159,34 @@ export default function OrderDetailScreen() {
             })),
             discount: data.DT.discount,
             status: data.DT.orderStatus,
+            orderStatus: data.DT.orderStatus,
+            paymentMethod: data.DT.paymentMethod,
+            paymentStatus: data.DT.paymentStatus,
+            totalPrice: data.DT.totalPrice,
+            shippingFee: data.DT.shippingFee,
+            finalAmount: data.DT.finalAmount,
             createdAt: data.DT.createdAt,
             updatedAt: data.DT.updatedAt,
+            note: data.DT.note || '',
             isRated: data.DT.isRated,
             shipper: data.DT.shipper,
             __v: data.DT.__v
           };
+          
           await AsyncStorage.setItem(`order_${id}`, JSON.stringify(orderData));
           if (isMounted) setOrder(orderData);
         } else {
           throw new Error(data.EM || 'Failed to fetch order');
         }
       } catch (error) {
-        console.error("Error fetching order 3:", error);
+        console.error("Error fetching order:", error);
         if (isMounted) setError(error instanceof Error ? error.message : 'Failed to fetch order');
       } finally {
         if (isMounted) setLoading(false);
       }
     };
+    
+    fetchOrder();
     // Thêm debounce để giới hạn tần suất gọi API
     timeoutId = setTimeout(fetchOrder, 5000);
 
@@ -176,7 +194,7 @@ export default function OrderDetailScreen() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [id, isUpdating]); // Loại bỏ order khỏi dependencies để tránh gọi API liên tục
+  }, [id, isUpdating]);
 
   const handleCall = (phoneNumber: string) => {
     if (!phoneNumber || !order) return;
@@ -214,9 +232,11 @@ export default function OrderDetailScreen() {
     if (!socket || !order || isUpdating) return;
 
     try {
-      const currentIndex = statusWorkflow.indexOf(order.orderStatus || order.status);
+      const currentStatus = order.orderStatus || order.status;
+      const currentIndex = statusWorkflow.indexOf(currentStatus);
       const nextStatus = statusWorkflow[currentIndex + 1];
-      if (!nextStatus || nextStatus === order.orderStatus) {
+      
+      if (!nextStatus || nextStatus === currentStatus) {
         Alert.alert('Lỗi', 'Không thể chuyển sang trạng thái tiếp theo');
         return;
       }
@@ -247,6 +267,7 @@ export default function OrderDetailScreen() {
   // Sửa lại nút cập nhật trạng thái để lấy text theo orderStatus
   const getNextStatusButtonText = (): string => {
     if (!order) return "";
+    const currentStatus = order.orderStatus || order.status;
     const statusTextMap: Record<OrderStatus, string> = {
       goingToRestaurant: "Đã đến nhà hàng",
       arrivedAtRestaurant: "Đã lấy hàng",
@@ -255,7 +276,7 @@ export default function OrderDetailScreen() {
       arrivedAtCustomer: "Hoàn thành giao hàng",
       delivered: "Đã hoàn thành"
     };
-    return statusTextMap[order.orderStatus || order.status];
+    return statusTextMap[currentStatus];
   };
 
   if (loading || isUpdating) {
@@ -286,7 +307,8 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const isDelivered = order.status === "delivered";
+  const currentStatus = order.orderStatus || order.status;
+  const isDelivered = currentStatus === "delivered";
   
   // Ánh xạ trạng thái đơn hàng sang các bước trong timeline
   const ORDER_STATUSES: Record<OrderStatus, number> = {
@@ -298,15 +320,6 @@ export default function OrderDetailScreen() {
     delivered: 5
   };
 
-  // Xác định hiển thị vị trí nào dựa trên trạng thái đơn hàng
-  const showRestaurantLocation = ["goingToRestaurant", "arrivedAtRestaurant"].includes(order.status);
-  const showCustomerLocation = ["pickedUp", "delivering", "arrivedAtCustomer"].includes(order.status);
-
-  // Ánh xạ trạng thái đơn hàng sang các bước trong timeline
-  const getStatusStep = (status: OrderStatus): number => {
-    return ORDER_STATUSES[status];
-  };
-
   // Danh sách các trạng thái theo thứ tự
   const statusList: OrderStatus[] = [
     'goingToRestaurant',
@@ -315,6 +328,21 @@ export default function OrderDetailScreen() {
     'delivering',
     'delivered'
   ];
+
+  // Tính tổng tiền topping cho mỗi món
+  const calculateToppingPrice = (toppings: any[]) => {
+    if (!toppings || toppings.length === 0) return 0;
+    
+    return toppings.reduce((total, topping) => {
+      if (!topping.item || !Array.isArray(topping.item)) return total;
+      
+      const toppingPrice = topping.item.reduce((sum, item) => {
+        return sum + (item.price || 0);
+      }, 0);
+      
+      return total + toppingPrice;
+    }, 0);
+  };
 
   return (
     <View style={styles.container}>
@@ -334,21 +362,21 @@ export default function OrderDetailScreen() {
             <View
               style={[
                 styles.statusBadge,
-                order.status === "delivered"
+                currentStatus === "delivered"
                   ? styles.statusDelivered
                   : styles.statusActive,
               ]}
             >
               <Text style={styles.statusText}>
-                {order.status === "goingToRestaurant"
+                {currentStatus === "goingToRestaurant"
                   ? "Đang đến nhà hàng"
-                  : order.status === "arrivedAtRestaurant"
+                  : currentStatus === "arrivedAtRestaurant"
                     ? "Đã đến nhà hàng"
-                    : order.status === "pickedUp"
+                    : currentStatus === "pickedUp"
                       ? "Đã lấy hàng"
-                      : order.status === "delivering"
+                      : currentStatus === "delivering"
                         ? "Đang giao hàng"
-                        : order.status === "arrivedAtCustomer"
+                        : currentStatus === "arrivedAtCustomer"
                           ? "Đã đến nơi giao"
                           : "Đã giao hàng"}
               </Text>
@@ -358,7 +386,7 @@ export default function OrderDetailScreen() {
           {/* Status Timeline */}
           <View style={styles.timeline}>
             {statusList.map((status, index) => {
-              const isActive = getStatusStep(order.status) >= getStatusStep(status);
+              const isActive = ORDER_STATUSES[currentStatus] >= ORDER_STATUSES[status];
               const isLast = index === statusList.length - 1;
 
               return (
@@ -382,6 +410,49 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        {/* Order Summary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tóm tắt đơn hàng</Text>
+          <View style={styles.orderSummaryRow}>
+            <Text style={styles.orderSummaryLabel}>Mã đơn:</Text>
+            <Text style={styles.orderSummaryValue}>#{order._id.slice(-8)}</Text>
+          </View>
+          <View style={styles.orderSummaryRow}>
+            <Text style={styles.orderSummaryLabel}>Thời gian đặt:</Text>
+            <Text style={styles.orderSummaryValue}>{formatDate(order.createdAt)}</Text>
+          </View>
+          <View style={styles.orderSummaryRow}>
+            <Text style={styles.orderSummaryLabel}>Tổng tiền:</Text>
+            <Text style={styles.orderSummaryValue}>{formatCurrency(order.finalAmount)}</Text>
+          </View>
+          <View style={styles.orderSummaryRow}>
+            <Text style={styles.orderSummaryLabel}>Thanh toán:</Text>
+            <View style={styles.paymentMethod}>
+              <FontAwesome5
+                name={order.paymentMethod === "cash" ? "money-bill-wave" : "credit-card"}
+                size={16}
+                color="#4CAF50"
+              />
+              <Text style={styles.paymentMethodText}>
+                {order.paymentMethod === "cash" ? "Tiền mặt" : "Thẻ tín dụng"}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.orderSummaryRow}>
+            <Text style={styles.orderSummaryLabel}>Trạng thái thanh toán:</Text>
+            <View
+              style={[
+                styles.paymentStatusBadge,
+                order.paymentStatus === "completed" ? styles.paymentCompleted : styles.paymentPending,
+              ]}
+            >
+              <Text style={styles.paymentStatusText}>
+                {order.paymentStatus === "completed" ? "Đã thanh toán" : "Chưa thanh toán"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Restaurant Info */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -395,42 +466,27 @@ export default function OrderDetailScreen() {
                 }}
               >
                 <MaterialIcons name="directions" size={16} color="#fff" />
-                <Text style={styles.locationButtonText}>Chỉ đường đến nhà hàng</Text>
+                <Text style={styles.locationButtonText}>Chỉ đường</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.restaurantInfo}>
-            <View style={styles.restaurantImageContainer}>
-              <Image 
-                source={{ uri: order.restaurant?.photoUrl || 'https://via.placeholder.com/60' }} 
-                style={styles.restaurantImage} 
-              />
-            </View>
             <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>{order.items[0]?.food?.restaurant?.name || 'Nhà hàng không xác định'}</Text>
-              {order.restaurant?.location?.latitude && order.restaurant?.location?.longitude ? (
-                <Text style={styles.restaurantAddress}>
-                  Tọa độ: {order.restaurant.location.latitude}, {order.restaurant.location.longitude}
-                </Text>
-              ) : (
-                <Text style={styles.restaurantAddress}>{order.restaurant?.location?.address || 'Không có địa chỉ'}</Text>
-              )}
+              <Text style={styles.restaurantName}>{order.restaurant?.name || 'Nhà hàng không xác định'}</Text>
+              <Text style={styles.restaurantAddress}>
+                {order.restaurant?.address || 
+                 (order.restaurant?.location ? 
+                  `Tọa độ: ${order.restaurant.location.latitude}, ${order.restaurant.location.longitude}` : 
+                  'Không có địa chỉ')}
+              </Text>
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(
-                  (order.items[0]?.food?.restaurant?.phone) ||
-                  (order.restaurant?.phone) ||
-                  ''
-                )}
+                onPress={() => handleCall(order.restaurant?.phone || '')}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
-                  {formatPhoneNumber(
-                    (order.items[0]?.food?.restaurant?.phone) ||
-                    (order.restaurant?.phone) ||
-                    ''
-                  )}
+                  {formatPhoneNumber(order.restaurant?.phone || '')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -450,29 +506,22 @@ export default function OrderDetailScreen() {
                 }}
               >
                 <MaterialIcons name="directions" size={16} color="#fff" />
-                <Text style={styles.locationButtonText}>Chỉ đường đến khách</Text>
+                <Text style={styles.locationButtonText}>Chỉ đường</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.customerInfo}>
             <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>{order.customer?.name || order.address?.name || 'Khách hàng không xác định'}</Text>
+              <Text style={styles.customerName}>{order.address?.name || 'Khách hàng không xác định'}</Text>
+              <Text style={styles.customerAddress}>{order.address?.address || 'Không có địa chỉ'}</Text>
               <TouchableOpacity 
                 style={styles.phoneButton} 
-                onPress={() => handleCall(
-                  (order.customer && order.customer.phone) ||
-                  (order.address && order.address.phoneNumber) ||
-                  ''
-                )}
+                onPress={() => handleCall(order.address?.phoneNumber || '')}
               >
                 <Ionicons name="call" size={14} color={colors.primary} />
                 <Text style={styles.phoneButtonText}>
-                  {formatPhoneNumber(
-                    (order.customer && order.customer.phone) ||
-                    (order.address && order.address.phoneNumber) ||
-                    ''
-                  )}
+                  {formatPhoneNumber(order.address?.phoneNumber || '')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -489,22 +538,49 @@ export default function OrderDetailScreen() {
         {/* Order Items */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chi tiết đơn hàng</Text>
-          {order.items.map((item) => (
-            <View key={item._id} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemQuantity}>x{item.quantity}</Text>
-              <Text style={styles.itemPrice}>{item.price.toLocaleString('vi-VN')}đ</Text>
-            </View>
-          ))}
+          
+          {order.items.map((item, index) => {
+            const toppingPrice = calculateToppingPrice(item.toppings);
+            const totalItemPrice = (item.price * item.quantity) + toppingPrice;
+            
+            return (
+              <View key={item._id || index} style={styles.itemContainer}>
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+                </View>
+                
+                <View style={styles.itemPriceRow}>
+                  <Text style={styles.itemPriceLabel}>Đơn giá:</Text>
+                  <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+                </View>
+                
+                {item.toppings && item.toppings.length > 0 && (
+                  <>
+                    <Text style={styles.toppingsTitle}>Topping:</Text>
+                    {item.toppings.map((topping, toppingIndex) => (
+                      <View key={topping._id || toppingIndex}>
+                        {topping.item && topping.item.map((toppingItem, itemIndex) => (
+                          <View key={toppingItem.id || itemIndex} style={styles.toppingRow}>
+                            <Text style={styles.toppingName}>- Topping {itemIndex + 1}</Text>
+                            <Text style={styles.toppingPrice}>{formatCurrency(toppingItem.price)}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </>
+                )}
+                
+                <View style={styles.itemTotalRow}>
+                  <Text style={styles.itemTotalLabel}>Tổng:</Text>
+                  <Text style={styles.itemTotalPrice}>{formatCurrency(totalItemPrice)}</Text>
+                </View>
+                
+                {index < order.items.length - 1 && <View style={styles.itemDivider} />}
+              </View>
+            );
+          })}
         </View>
-
-        {/* Order Notes */}
-        {order.notes && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ghi chú</Text>
-            <Text style={styles.noteText}>{order.notes}</Text>
-          </View>
-        )}
 
         {/* Payment Info */}
         <View style={styles.section}>
@@ -520,7 +596,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.paymentValue}>{formatCurrency(order.shippingFee)}</Text>
           </View>
 
-          {order.discount && (
+          {order.discount && order.discount.amount > 0 && (
             <View style={styles.paymentRow}>
               <Text style={styles.paymentLabel}>Giảm giá</Text>
               <Text style={styles.discountValue}>-{formatCurrency(order.discount.amount)}</Text>
@@ -533,50 +609,44 @@ export default function OrderDetailScreen() {
             <Text style={styles.totalLabel}>Tổng thanh toán</Text>
             <Text style={styles.totalValue}>{formatCurrency(order.finalAmount)}</Text>
           </View>
-
-          <View style={styles.paymentMethodContainer}>
-            <Text style={styles.paymentMethodLabel}>Phương thức thanh toán:</Text>
-            <View style={styles.paymentMethod}>
-              <FontAwesome5
-                name={order.paymentMethod === "cash" ? "money-bill-wave" : "credit-card"}
-                size={16}
-                color="#4CAF50"
-              />
-              <Text style={styles.paymentMethodText}>
-                {order.paymentMethod === "cash" ? "Tiền mặt" : "Thẻ tín dụng"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.paymentStatusContainer}>
-            <Text style={styles.paymentStatusLabel}>Trạng thái thanh toán:</Text>
-            <View
-              style={[
-                styles.paymentStatusBadge,
-                order.paymentStatus === "completed" ? styles.paymentCompleted : styles.paymentPending,
-              ]}
-            >
-              <Text style={styles.paymentStatusText}>
-                {order.paymentStatus === "completed" ? "Đã thanh toán" : "Chưa thanh toán"}
-              </Text>
-            </View>
-          </View>
         </View>
 
-        {/* Order Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Thông tin đơn hàng</Text>
-
-          <View style={styles.orderInfoRow}>
-            <Text style={styles.orderInfoLabel}>Mã đơn hàng:</Text>
-            <Text style={styles.orderInfoValue}>#{order._id.slice(-8)}</Text>
+        {/* Shipper Info */}
+        {order.shipper && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Thông tin người giao hàng</Text>
+            
+            <View style={styles.shipperInfoRow}>
+              <Text style={styles.shipperInfoLabel}>Tên:</Text>
+              <Text style={styles.shipperInfoValue}>{order.shipper.Account?.username || 'Không xác định'}</Text>
+            </View>
+            
+            <View style={styles.shipperInfoRow}>
+              <Text style={styles.shipperInfoLabel}>Số điện thoại:</Text>
+              <TouchableOpacity onPress={() => handleCall(order.shipper.phone || '')}>
+                <Text style={styles.shipperInfoValueLink}>{formatPhoneNumber(order.shipper.phone || '')}</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.shipperInfoRow}>
+              <Text style={styles.shipperInfoLabel}>Phương tiện:</Text>
+              <Text style={styles.shipperInfoValue}>
+                {order.shipper.transportation === 'bicycle' ? 'Xe đạp' : 
+                 order.shipper.transportation === 'motorbike' ? 'Xe máy' : 
+                 order.shipper.transportation}
+              </Text>
+            </View>
+            
+            <View style={styles.shipperInfoRow}>
+              <Text style={styles.shipperInfoLabel}>Trạng thái:</Text>
+              <View style={styles.shipperStatusBadge}>
+                <Text style={styles.shipperStatusText}>
+                  {order.shipper.isOnline ? 'Đang hoạt động' : 'Không hoạt động'}
+                </Text>
+              </View>
+            </View>
           </View>
-
-          <View style={styles.orderInfoRow}>
-            <Text style={styles.orderInfoLabel}>Thời gian đặt:</Text>
-            <Text style={styles.orderInfoValue}>{formatDate(order.createdAt)}</Text>
-          </View>
-        </View>
+        )}
       </ScrollView>
 
       {!isDelivered && (
@@ -584,6 +654,7 @@ export default function OrderDetailScreen() {
           title={getNextStatusButtonText()}
           onPress={handleStatusUpdate}
           style={styles.updateButton}
+          disabled={isUpdating}
         />
       )}
     </View>
@@ -755,17 +826,26 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
+  // Order Summary Styles
+  orderSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  orderSummaryLabel: {
+    fontSize: 14,
+    color: "#6c757d",
+  },
+  orderSummaryValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#212529",
+  },
+  // Restaurant Styles
   restaurantInfo: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  restaurantImageContainer: {
-    marginRight: 12,
-  },
-  restaurantImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
   },
   restaurantDetails: {
     flex: 1,
@@ -791,6 +871,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
   },
+  // Customer Styles
   customerInfo: {
     flexDirection: "row",
     alignItems: "center",
@@ -802,6 +883,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#212529",
+    marginBottom: 4,
+  },
+  customerAddress: {
+    fontSize: 14,
+    color: "#6c757d",
     marginBottom: 8,
   },
   noteContainer: {
@@ -820,10 +906,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#212529",
   },
-  itemRow: {
+  // Item Styles
+  itemContainer: {
+    marginBottom: 12,
+  },
+  itemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "center",
+    marginBottom: 4,
   },
   itemName: {
     fontSize: 15,
@@ -833,12 +924,64 @@ const styles = StyleSheet.create({
   },
   itemQuantity: {
     fontSize: 14,
+    fontWeight: "500",
+    color: "#6c757d",
+  },
+  itemPriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  itemPriceLabel: {
+    fontSize: 14,
     color: "#6c757d",
   },
   itemPrice: {
     fontSize: 14,
     color: "#212529",
   },
+  toppingsTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6c757d",
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  toppingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingLeft: 8,
+    marginBottom: 2,
+  },
+  toppingName: {
+    fontSize: 13,
+    color: "#6c757d",
+  },
+  toppingPrice: {
+    fontSize: 13,
+    color: "#212529",
+  },
+  itemTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  itemTotalLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#212529",
+  },
+  itemTotalPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  itemDivider: {
+    height: 1,
+    backgroundColor: "#E0E0E0",
+    marginVertical: 10,
+  },
+  // Payment Styles
   paymentRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -871,16 +1014,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: colors.primary,
   },
-  paymentMethodContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 16,
-  },
-  paymentMethodLabel: {
-    fontSize: 14,
-    color: "#6c757d",
-    marginRight: 8,
-  },
   paymentMethod: {
     flexDirection: "row",
     alignItems: "center",
@@ -890,16 +1023,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#212529",
     marginLeft: 6,
-  },
-  paymentStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  paymentStatusLabel: {
-    fontSize: 14,
-    color: "#6c757d",
-    marginRight: 8,
   },
   paymentStatusBadge: {
     paddingHorizontal: 8,
@@ -917,19 +1040,36 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4CAF50",
   },
-  orderInfoRow: {
+  // Shipper Styles
+  shipperInfoRow: {
     flexDirection: "row",
     marginBottom: 8,
   },
-  orderInfoLabel: {
+  shipperInfoLabel: {
     fontSize: 14,
     color: "#6c757d",
     width: 120,
   },
-  orderInfoValue: {
+  shipperInfoValue: {
     fontSize: 14,
     color: "#212529",
     fontWeight: "500",
+  },
+  shipperInfoValueLink: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: "500",
+  },
+  shipperStatusBadge: {
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  shipperStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4CAF50",
   },
   updateButton: {
     margin: 16,

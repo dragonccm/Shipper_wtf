@@ -55,6 +55,7 @@ export default function OrdersScreen(): JSX.Element {
       if (!user?.shipperId) return;
 
       const response = await fetch(`${API_URL}/api/shipper/orders/${user.shipperId}`);
+      console.log('🚀 Fetching active orders:', JSON.stringify(response));
       const data = await response.json();
 
       if (data.EC === "0" && data.DT) {
@@ -555,7 +556,7 @@ export default function OrdersScreen(): JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.background, padding: 16, marginTop: 26  },
   pageTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text, marginBottom: 16 },
   listContainer: { paddingBottom: 20 },
   orderCard: {
