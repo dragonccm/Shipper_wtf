@@ -3,7 +3,7 @@ import { User, Order } from "@/types";
 
 // Cấu hình API
 // Sử dụng localhost hoặc 10.0.2.2 cho máy ảo Android
-const API_URL = "https://dark-rabbits-enjoy.loca.lt/api";
+const API_URL = "https://smooth-taxis-rest.loca.lt/api";
 
 // Tạm thời sử dụng dữ liệu mẫu thay vì gọi API thật
 // const USE_MOCK_DATA = true;

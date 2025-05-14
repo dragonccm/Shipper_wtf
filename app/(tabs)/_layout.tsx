@@ -43,7 +43,9 @@ export default function TabLayout() {
       socket.off('new_order_assigned', handleNewOrder);
     };
   }, [isAuthenticated]);
-
+  socket.on('new_order_assigned', (data) => {
+    alert('Có đơn hàng mới!');
+  });
   useEffect(() => {
     // Chỉ tải dữ liệu khi đã xác thực
     if (isAuthenticated) {

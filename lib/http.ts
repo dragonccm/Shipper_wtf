@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 const ENTITY_ERROR_STATUS = 422;
 const AUTHENTICATION_ERROR_STATUS = 401;
 // Sử dụng trực tiếp giá trị từ .env.local
-const API_ENDPOINT = 'https://dark-rabbits-enjoy.loca.lt';
+const API_ENDPOINT = 'https://smooth-taxis-rest.loca.lt';
 
 // Định nghĩa các kiểu dữ liệu
 type CustomOptions = Omit<RequestInit, 'method'> & {

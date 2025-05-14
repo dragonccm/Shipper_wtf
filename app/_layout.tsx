@@ -5,12 +5,12 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
-import { Platform, View, ActivityIndicator, Text, Alert } from "react-native";
+import { Platform, View, ActivityIndicator, Text, Alert, TouchableOpacity } from "react-native";
 import { ErrorBoundary } from "./error-boundary";
 import { colors } from "@/constants/colors";
 import { socket } from '@/utils/socket';
 import { useAuthStore } from '@/store/authStore';
-
+import { NewOrderPopup } from "@/components/NewOrderPopup";
 export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
@@ -22,12 +22,14 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     ...FontAwesome.font,
   });
-  
+
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const router = useRouter();
   const { user } = useAuthStore();
   const [isOnline, setIsOnline] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
+  const [showNewOrderPopup, setShowNewOrderPopup] = useState(false);
+  const [newOrder, setNewOrder] = useState<any>(null);
 
   // Kiểm tra xác thực khi ứng dụng khởi động
   useEffect(() => {
@@ -58,25 +60,11 @@ export default function RootLayout() {
     if (!user?.shipperId) return;
 
     const handleNewOrder = (data: { orderId: string; orderDetails: any }) => {
-      Alert.alert(
-        'Đơn hàng mới',
-        `Bạn có muốn nhận đơn ${data.orderId} không?`,
-        [
-          { text: 'Từ chối', style: 'cancel' },
-          {
-            text: 'Chấp nhận',
-            onPress: () => {
-              // Gửi xác nhận nhận đơn qua socket hoặc gọi API
-              socket.emit('accept_order', {
-                orderId: data.orderId,
-                shipperId: user.shipperId,
-              });
-              // Điều hướng tới chi tiết đơn hàng
-              router.push(`/order/${data.orderId}`);
-            },
-          },
-        ],
-      );
+      setNewOrder({
+        _id: data.orderId,
+        ...data.orderDetails
+      });
+      setShowNewOrderPopup(true);
     };
 
     socket.on('new_order_assigned', handleNewOrder);
@@ -85,6 +73,9 @@ export default function RootLayout() {
       socket.off('new_order_assigned', handleNewOrder);
     };
   }, [user?.shipperId]);
+  socket.on('new_order_assigned', (data) => {
+    alert('Có đơn hàng mới!');
+  });
 
   // Lắng nghe trạng thái online từ server (nếu có)
   useEffect(() => {
@@ -136,10 +127,66 @@ export default function RootLayout() {
     );
   }
 
+  const handleTestPopup = () => {
+    setNewOrder({
+      _id: 'test-order-id',
+      items: [
+        {
+          food: {
+            name: 'Món ăn test',
+            price: 50000
+          },
+          quantity: 2
+        }
+      ],
+      total: 100000,
+      customer: {
+        name: 'Khách hàng test',
+        phone: '0123456789',
+        address: '123 Đường Test'
+      }
+    });
+    setShowNewOrderPopup(true);
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
         <RootLayoutNav />
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            right: 20,
+            backgroundColor: colors.primary,
+            padding: 10,
+            borderRadius: 8,
+            elevation: 3,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }}
+          onPress={handleTestPopup}
+        >
+          <Text style={{ color: colors.white }}>Test Popup</Text>
+        </TouchableOpacity>
+        {showNewOrderPopup && newOrder && (
+          <NewOrderPopup
+            order={newOrder}
+            onAccept={() => {
+              socket.emit('accept_order', {
+                orderId: newOrder._id,
+                shipperId: user?.shipperId,
+              });
+              setShowNewOrderPopup(false);
+              router.push(`/order/${newOrder._id}`);
+            }}
+            onDecline={() => {
+              setShowNewOrderPopup(false);
+            }}
+          />
+        )}
       </ErrorBoundary>
     </GestureHandlerRootView>
   );
@@ -147,7 +194,7 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const router = useRouter();
-  
+
   // Chuyển hướng người dùng dựa trên trạng thái xác thực
   useEffect(() => {
     // if (isAuthenticated) {
@@ -156,17 +203,17 @@ function RootLayoutNav() {
     //   router.replace('/auth/login');
     // }
   }, [router]);
-  
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen 
-        name="order/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="order/[id]"
+        options={{
           headerShown: true,
           title: "Chi tiết đơn hàng",
           headerBackTitle: "Quay lại"
-        }} 
+        }}
       />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />

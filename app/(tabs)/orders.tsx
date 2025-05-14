@@ -326,9 +326,6 @@ export default function OrdersScreen(): JSX.Element {
             style={expanded ? styles.rotatedIcon : undefined}
           />
         </View>
-        <View style={{ opacity: 1 }}>
-          <Button title="Kiểm tra" onPress={sendLocation} />
-        </View>
 
       </TouchableOpacity>
     );

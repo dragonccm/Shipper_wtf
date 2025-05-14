@@ -1,1 +1,1 @@
-export const API_URL = 'https://dark-rabbits-enjoy.loca.lt'; // Thay đổi URL này theo backend của bạn 
+export const API_URL = 'https://smooth-taxis-rest.loca.lt'; // Thay đổi URL này theo backend của bạn 

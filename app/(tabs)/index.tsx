@@ -68,6 +68,7 @@ export default function HomeScreen() {
 
   const toggleWorkStatus = () => {
     setIsWorking(!isWorking);
+    handleOnlineStatusChange(!isWorking)
     if (!isWorking) {
       // Start work timer
       workTimerRef.current = setInterval(() => {
@@ -144,20 +145,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Trang chủ</Text>
-        <View style={styles.onlineStatusContainer}>
-          <Text style={styles.onlineStatusText}>
-            {isOnline ? 'Đang hoạt động' : 'Tạm dừng'}
-          </Text>
-          <Switch
-            value={isOnline}
-            onValueChange={handleOnlineStatusChange}
-            trackColor={{ false: '#767577', true: colors.primary }}
-            thumbColor={isOnline ? '#fff' : '#f4f3f4'}
-          />
-        </View>
-      </View>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -189,8 +176,8 @@ export default function HomeScreen() {
             <Navigation size={24} color={colors.white} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.controlButton, isWorking ? styles.workingButton : styles.notWorkingButton]} 
+          <TouchableOpacity
+            style={[styles.controlButton, isWorking ? styles.workingButton : styles.notWorkingButton]}
             onPress={toggleWorkStatus}
           >
             <Power size={24} color={colors.white} />
@@ -210,7 +197,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 16,
   },
   header: {
     flexDirection: 'row',

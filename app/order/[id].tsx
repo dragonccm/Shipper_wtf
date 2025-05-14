@@ -98,6 +98,8 @@ export default function OrderDetailScreen() {
   // Lấy order từ cache trước, nếu không có thì fetch từ server
   useEffect(() => {
     let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
     const fetchOrder = async () => {
       try {
         // Luôn thử lấy từ AsyncStorage trước
@@ -111,7 +113,7 @@ export default function OrderDetailScreen() {
         }
 
         // Luôn fetch mới để đảm bảo dữ liệu cập nhật
-        const response = await fetch(`https://dark-rabbits-enjoy.loca.lt/api/getorder/${id}`, {
+        const response = await fetch(`https://smooth-taxis-rest.loca.lt/api/getorder/${id}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json"
@@ -159,15 +161,20 @@ export default function OrderDetailScreen() {
           throw new Error(data.EM || 'Failed to fetch order');
         }
       } catch (error) {
-        console.error("Error fetching order:", error);
+        console.error("Error fetching order 3:", error);
         if (isMounted) setError(error instanceof Error ? error.message : 'Failed to fetch order');
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-    fetchOrder();
-    return () => { isMounted = false; };
-  }, [id,order,isUpdating]);
+    // Thêm debounce để giới hạn tần suất gọi API
+    timeoutId = setTimeout(fetchOrder, 5000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [id, isUpdating]); // Loại bỏ order khỏi dependencies để tránh gọi API liên tục
 
   const handleCall = (phoneNumber: string) => {
     if (!phoneNumber || !order) return;

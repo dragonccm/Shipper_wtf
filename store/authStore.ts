@@ -83,7 +83,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const token = await getAccessToken();
           if (token) {
-            const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/check-auth", {
+            const res = await fetch("https://smooth-taxis-rest.loca.lt/api/check-auth", {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -120,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting login with:", { phoneNumber });
         set({ isLoading: true });
         try {
-          const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/login_phone", {
+          const res = await fetch("https://smooth-taxis-rest.loca.lt/api/login_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -165,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
         console.log("Attempting register with:", { phoneNumber, name });
         set({ isLoading: true });
         try {
-          const res = await fetch("https://dark-rabbits-enjoy.loca.lt/api/register_phone", {
+          const res = await fetch("https://smooth-taxis-rest.loca.lt/api/register_phone", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
