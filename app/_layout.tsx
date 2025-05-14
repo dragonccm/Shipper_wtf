@@ -127,50 +127,14 @@ export default function RootLayout() {
     );
   }
 
-  const handleTestPopup = () => {
-    setNewOrder({
-      _id: 'test-order-id',
-      items: [
-        {
-          food: {
-            name: 'Món ăn test',
-            price: 50000
-          },
-          quantity: 2
-        }
-      ],
-      total: 100000,
-      customer: {
-        name: 'Khách hàng test',
-        phone: '0123456789',
-        address: '123 Đường Test'
-      }
-    });
-    setShowNewOrderPopup(true);
-  };
+  
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
         <RootLayoutNav />
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 20,
-            right: 20,
-            backgroundColor: colors.primary,
-            padding: 10,
-            borderRadius: 8,
-            elevation: 3,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-          }}
-          onPress={handleTestPopup}
-        >
-          <Text style={{ color: colors.white }}>Test Popup</Text>
-        </TouchableOpacity>
+       
+     
         {showNewOrderPopup && newOrder && (
           <NewOrderPopup
             order={newOrder}

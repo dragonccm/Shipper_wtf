@@ -24,9 +24,11 @@ import { useOrderStore } from "@/store/orderStore";
 import { useRouter } from "expo-router";
 import { socket } from "@/utils/socket";
 import { Order } from '../../types';
+import { useAuthStore } from "@/store/authStore";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuthStore();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -225,7 +227,7 @@ export default function OrderDetailScreen() {
       socket.emit('order_status_update', {
         orderId: order._id,
         status: nextStatus,
-        shipperId: order.shipper
+        shipperId: user?.shipperId
       });
 
       setTimeout(() => {
